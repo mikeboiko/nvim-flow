@@ -5,7 +5,7 @@ vim.opt.runtimepath:prepend(root)
 
 local plenary_path = os.getenv("PLENARY_PATH") or (vim.fn.stdpath("data") .. "/lazy/plenary.nvim")
 if (vim.uv or vim.loop).fs_stat(plenary_path) then
-  vim.opt.runtimepath:prepend(plenary_path)
+	vim.opt.runtimepath:prepend(plenary_path)
 end
 
 vim.opt.swapfile = false

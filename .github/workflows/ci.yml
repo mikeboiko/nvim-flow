@@ -1,0 +1,43 @@
+name: ci
+
+on:
+  push:
+
+jobs:
+  lua-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y neovim lua5.4
+
+      - name: Fetch plenary.nvim
+        run: |
+          mkdir -p .deps
+          git clone --depth 1 https://github.com/nvim-lua/plenary.nvim .deps/plenary.nvim
+
+      - name: Stylua check
+        uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: latest
+          args: --check lua plugin tests
+
+      - name: Lua syntax checks
+        run: |
+          find lua plugin tests -name '*.lua' -print | while read -r f; do
+            lua -e "assert(loadfile('$f'))"
+          done
+
+      - name: Run plenary tests
+        env:
+          PLENARY_PATH: ${{ github.workspace }}/.deps/plenary.nvim
+        run: |
+          nvim --headless -u tests/minimal_init.lua \
+            -c "PlenaryBustedDirectory tests/nvim-flow { minimal_init = 'tests/minimal_init.lua' }" \
+            -c "qa"

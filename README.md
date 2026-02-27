@@ -1,11 +1,11 @@
 # nvim-flow
 
-`nvim-flow` is a Lua-only Neovim port of `vim-flow`.
+`nvim-flow` is a Neovim workflow runner for file-based commands defined in `.flow.yml`.
 
 ## Motivation
 
-I wanted to keep the same workflow as `vim-flow`, but remove the Python dependency and simplify maintenance.
-The old extra runners (tmux + remote runners) were too complicated for my day-to-day usage, so this port focuses on the core Neovim terminal runner and debug integration.
+I wanted a workflow that matches how I actually work in Neovim: simple YAML config, fast command resolution, and quick run/debug feedback without extra runtime dependencies.
+The extra runners (tmux + remote runners) were too complicated for my day-to-day usage, so this project intentionally focuses on the core terminal runner and debug integration.
 
 ## Features
 
@@ -24,10 +24,12 @@ The old extra runners (tmux + remote runners) were too complicated for my day-to
 return {
   "mikeboiko/nvim-flow",
   dir = "~/git/OpenSource/nvim-flow",
+  event = { "BufReadPost", "BufNewFile" },
   cmd = { "FlowRun", "FlowDebug", "FlowToggleLock", "FlowPreview", "FlowQuickfix" },
   opts = {
     config_file = ".flow.yml",
     terminal_height = 15,
+    terminal_position = "top",
     stop_at_home = true,
     show_command = true,
     keymaps = {
@@ -47,6 +49,7 @@ return {
 require("nvim-flow").setup({
   config_file = ".flow.yml",
   terminal_height = 15,
+  terminal_position = "top", -- "top" | "bottom"
   stop_at_home = true,
   show_command = true,
   keymaps = {
@@ -62,7 +65,7 @@ require("nvim-flow").setup({
 ## Commands
 
 - `:FlowRun` - run resolved flow command in a terminal split
-- `:FlowDebug` - run resolved command using your `config.dap.functions.flow_debug()` integration
+- `:FlowDebug` - run resolved command with built-in command parsing + nvim-dap launch config
 - `:FlowToggleLock[ {filepath}]` - toggle lock (or set lock to explicit path)
 - `:FlowSet {filepath}` - compatibility alias for setting lock directly
 - `:FlowPreview` - show resolved command for current (or locked) file
@@ -87,7 +90,7 @@ main.py:
 
 ```yaml
 python-group:
-  match: [py, pyw, "test_*.py", "scripts/"]
+  match: [py, pyw, 'test_*.py', 'scripts/']
   cmd: python "{{filepath}}"
 ```
 
@@ -102,6 +105,8 @@ If `match` is omitted, the top-level key is used as before.
 5. filename without extension
 6. extension (`.py` then `py`)
 7. `default`
+
+If multiple `match` entries apply, `nvim-flow` uses deterministic precedence: nearest config file first, then YAML declaration order within that file.
 
 ## Recursive merge behavior
 
@@ -128,8 +133,9 @@ All found configs are merged. Closer files override farther files.
 ## Runner behavior
 
 - Default runner: terminal split (`runner: vim` or omitted)
+- Terminal split opens at the top by default; set `terminal_position = "bottom"` to open below.
+- With `show_command = true`, the separator line is sized to the command width (capped by terminal width).
 - Debug runner: `runner: debug` or `:FlowDebug`
-- Removed from this Lua port: tmux runner, remote runners
 
 ## Quickfix behavior
 
@@ -150,3 +156,8 @@ nvim --headless -u tests/minimal_init.lua \
   -c "PlenaryBustedDirectory tests/nvim-flow { minimal_init = 'tests/minimal_init.lua' }" \
   -c "qa"
 ```
+
+## Credit
+
+This project was inspired by ideas from `vim-flow`, with substantial changes for this codebase and workflow:
+https://github.com/jonmorehouse/vim-flow

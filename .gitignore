@@ -2,3 +2,5 @@
 /.luarocks
 /tmp/
 /*.rockspec
+/tags
+tags.*

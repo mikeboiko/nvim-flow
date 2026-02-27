@@ -1,0 +1,4 @@
+/.tests_state
+/.luarocks
+/tmp/
+/*.rockspec

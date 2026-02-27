@@ -1,0 +1,19 @@
+local quickfix = require("nvim-flow.quickfix")
+
+describe("nvim-flow quickfix parser", function()
+  it("parses python traceback entries", function()
+    local items = quickfix.parse_python_traceback({
+      "Traceback (most recent call last):",
+      '  File "/tmp/main.py", line 12, in <module>',
+      "    run()",
+      '  File "/tmp/lib.py", line 3, in run',
+      "    raise ValueError('boom')",
+      "ValueError: boom",
+    })
+
+    assert.are.equal(2, #items)
+    assert.are.equal("/tmp/main.py", items[1].filename)
+    assert.are.equal(12, items[1].lnum)
+    assert.are.equal("run()", items[1].text)
+  end)
+end)

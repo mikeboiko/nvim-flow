@@ -190,7 +190,6 @@ local function pattern_matches(pattern, ctx)
 		ctx.basename,
 		ctx.folder,
 		ctx.repo,
-		ctx.filename,
 		ctx.ext,
 		ctx.dotext,
 	}
@@ -211,7 +210,6 @@ local function pattern_matches(pattern, ctx)
 			ctx.basename,
 			ctx.folder,
 			ctx.repo,
-			ctx.filename,
 			ctx.ext,
 			ctx.dotext,
 			ctx.filepath,
@@ -264,11 +262,6 @@ function M.find_match(flow_defs, ctx)
 	local repo_match = flow_defs[ctx.repo]
 	if type(repo_match) == "table" then
 		return ctx.repo, repo_match
-	end
-
-	local filename_match = flow_defs[ctx.filename]
-	if type(filename_match) == "table" then
-		return ctx.filename, filename_match
 	end
 
 	local dotext_match = flow_defs[ctx.dotext]

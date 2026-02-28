@@ -43,9 +43,8 @@ It resolves a command for the current file from YAML config and runs it in a Neo
   2. `match:` entries
   3. folder name
   4. repo name
-  5. filename without extension
-  6. extension (`.py`, then `py`)
-  7. `default`
+  5. extension (`.py`, then `py`)
+  6. `default`
 - `match` is optional.
   - If omitted, legacy key-based matching is used.
   - If present, should be string or array.

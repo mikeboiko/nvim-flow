@@ -156,9 +156,8 @@ Resolution order:
 2. **`match` entries**
 3. **folder name**
 4. **repo name**
-5. **filename without extension**
-6. **extension** (`.py` then `py`)
-7. **`default`**
+5. **extension** (`.py` then `py`)
+6. **`default`**
 
 Example definitions for each priority type:
 
@@ -176,23 +175,20 @@ tests:
 my-repo:
   cmd: echo "4 repo"
 
-main:
-  cmd: echo "5 filename"
-
 .py:
-  cmd: echo "6 extension-dot"
+  cmd: echo "5 extension-dot"
 
 py:
-  cmd: echo "6 extension"
+  cmd: echo "5 extension"
 
 default:
-  cmd: echo "7 default"
+  cmd: echo "6 default"
 ```
 
 Mini winner scenario:
 
 - For `/work/my-repo/tests/main.py`, `main.py` (basename) wins.
-- If the basename entry is removed, `match` entries are checked before folder/repo/filename/extension/default.
+- If the basename entry is removed, `match` entries are checked before folder/repo/extension/default.
 
 If multiple `match` entries apply, `nvim-flow` uses deterministic precedence: nearest config file first, then YAML declaration order within that file.
 

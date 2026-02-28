@@ -162,6 +162,34 @@ repo-match:
 		assert.is_true(contains(cmd_def.cmd, "echo from-repo"))
 	end)
 
+	it("does not match filename without extension", function()
+		local home = root .. "/home"
+		local repo = home .. "/repo"
+		local src = repo .. "/src"
+		local target = src .. "/worker.py"
+
+		write_file(
+			home .. "/.flow.yml",
+			[[
+worker:
+  cmd: echo from-filename
+py:
+  cmd: echo from-extension
+]]
+		)
+
+		write_file(target, "print('hello')\n")
+
+		local cmd_def = assert(config.resolve(target, {
+			config_file = ".flow.yml",
+			stop_at_home = true,
+			home = home,
+		}))
+
+		assert.is_true(contains(cmd_def.cmd, "echo from-extension"))
+		assert.is_false(contains(cmd_def.cmd, "echo from-filename"))
+	end)
+
 	it("parses plain multiline cmd blocks with URLs", function()
 		local home = root .. "/home"
 		local repo = home .. "/repo"

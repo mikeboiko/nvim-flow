@@ -1,6 +1,6 @@
 # nvim-flow
 
-`nvim-flow` is a Neovim workflow runner for file-based commands defined in `.flow.yml`.
+`nvim-flow` is a pure lua Neovim workflow runner for file-based commands defined in `.flow.yml`.
 
 ## Motivation
 
@@ -9,13 +9,13 @@ The extra runners (tmux + remote runners) were too complicated for my day-to-day
 
 ## Features
 
-- Pure Lua plugin (no Python provider required)
-- YAML config (`.flow.yml`)
-- Recursive flow discovery + merge (file dir -> `$HOME`, closer wins)
-- Optional `match` arrays for reusable command definitions
+- First-class `nvim-dap` integration through `FlowDebug`
 - File lock support (`:FlowToggleLock`)
 - Command preview in a floating window (`:FlowPreview`)
 - Python traceback -> quickfix parser (`:FlowQuickfix`)
+- YAML config (`.flow.yml`)
+- Recursive flow discovery + merge (file dir -> `$HOME`, closer wins)
+- Optional `match` arrays for reusable command definitions
 - Configurable keymaps through `setup()`
 
 ## Installation (lazy.nvim)
@@ -44,7 +44,7 @@ return {
       show_command = true,
       keymaps = {
         run = "<CR>",
-        debug = "<leader>df",
+        debug = "<leader>fd",
         toggle_lock = "<leader>fl",
         preview = "<leader>fp",
         quickfix = "<leader>fq",
@@ -100,11 +100,26 @@ require("nvim-flow").setup({
 ## Commands
 
 - `:FlowRun` - run resolved flow command in a terminal split
-- `:FlowDebug` - run resolved command with built-in command parsing + nvim-dap launch config
+- `:FlowDebug` - resolve the same flow command and launch a matching `nvim-dap` debug session
 - `:FlowToggleLock[ {filepath}]` - toggle lock (or set lock to explicit path)
 - `:FlowSet {filepath}` - compatibility alias for setting lock directly
 - `:FlowPreview` - show resolved command for current (or locked) file
 - `:FlowQuickfix` - parse the last flow output as Python traceback and fill quickfix
+
+## Debug integration (`nvim-dap`)
+
+`FlowDebug` uses the same command resolution pipeline as `FlowRun`, then parses the command to create a debug configuration for `nvim-dap` and calls `dap.continue()`.
+
+Supported command families include `python` / `python3`, `uv run ...` (including module mode), and `node`.
+
+Example:
+
+```yaml
+py:
+  cmd: python "{{filepath}}" --env dev
+```
+
+Running `:FlowDebug` on a Python buffer resolves this flow, builds the debug launch config, and starts the debugger.
 
 ## `.flow.yml` format
 
@@ -133,13 +148,49 @@ If `match` is omitted, the top-level key is used as before.
 
 ### Match priority
 
-1. basename (e.g., `main.py`)
-2. `match` entries
-3. folder name
-4. repo name
-5. filename without extension
-6. extension (`.py` then `py`)
-7. `default`
+Resolution order:
+
+1. **basename** (e.g., `main.py`)
+2. **`match` entries**
+3. **folder name**
+4. **repo name**
+5. **filename without extension**
+6. **extension** (`.py` then `py`)
+7. **`default`**
+
+Example definitions for each priority type:
+
+```yaml
+main.py:
+  cmd: echo "1 basename"
+
+python-group:
+  match: [py, 'test_*.py']
+  cmd: echo "2 match"
+
+tests:
+  cmd: echo "3 folder"
+
+my-repo:
+  cmd: echo "4 repo"
+
+main:
+  cmd: echo "5 filename"
+
+.py:
+  cmd: echo "6 extension-dot"
+
+py:
+  cmd: echo "6 extension"
+
+default:
+  cmd: echo "7 default"
+```
+
+Mini winner scenario:
+
+- For `/work/my-repo/tests/main.py`, `main.py` (basename) wins.
+- If the basename entry is removed, `match` entries are checked before folder/repo/filename/extension/default.
 
 If multiple `match` entries apply, `nvim-flow` uses deterministic precedence: nearest config file first, then YAML declaration order within that file.
 
@@ -170,7 +221,7 @@ All found configs are merged. Closer files override farther files.
 - Default runner: terminal split (`runner: vim` or omitted)
 - Terminal split opens at the top by default; set `terminal_position = "bottom"` to open below.
 - With `show_command = true`, the separator line is sized to the command width (capped by terminal width).
-- Debug runner: `runner: debug` or `:FlowDebug`
+- Debug runner: `runner: debug` or `:FlowDebug` (requires `nvim-dap`)
 
 ## Quickfix behavior
 

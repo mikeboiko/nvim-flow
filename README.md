@@ -20,30 +20,44 @@ The extra runners (tmux + remote runners) were too complicated for my day-to-day
 
 ## Installation (lazy.nvim)
 
+### Minimum
+
 ```lua
 return {
-  "mikeboiko/nvim-flow",
-  dir = "~/git/OpenSource/nvim-flow",
-  event = { "BufReadPost", "BufNewFile" },
-  cmd = { "FlowRun", "FlowDebug", "FlowToggleLock", "FlowPreview", "FlowQuickfix" },
-  opts = {
-    config_file = ".flow.yml",
-    terminal_height = 15,
-    terminal_position = "top",
-    stop_at_home = true,
-    show_command = true,
-    keymaps = {
-      run = "<CR>",
-      debug = "<leader>df",
-      toggle_lock = "<leader>fl",
-      preview = "<leader>fp",
-      quickfix = "<leader>fq",
+  { "mikeboiko/nvim-flow" },
+}
+```
+
+### Typical (with optional settings)
+
+```lua
+return {
+  {
+    "mikeboiko/nvim-flow",
+    event = { "BufReadPost", "BufNewFile" },
+    cmd = { "FlowRun", "FlowDebug", "FlowToggleLock", "FlowPreview", "FlowQuickfix" },
+    opts = {
+      config_file = ".flow.yml",
+      terminal_height = 15,
+      terminal_position = "top",
+      stop_at_home = true,
+      show_command = true,
+      keymaps = {
+        run = "<CR>",
+        debug = "<leader>df",
+        toggle_lock = "<leader>fl",
+        preview = "<leader>fp",
+        quickfix = "<leader>fq",
+      },
     },
   },
 }
 ```
 
-## Setup
+## Setup (optional)
+
+`setup()` is only needed when you want to override defaults.
+If you skip setup, `nvim-flow` still works with built-in defaults.
 
 ```lua
 require("nvim-flow").setup({
@@ -62,6 +76,27 @@ require("nvim-flow").setup({
 })
 ```
 
+## Optional parameters
+
+- `config_file` (`string`, default: `".flow.yml"`)
+  - Filename to search while walking directories upward.
+- `terminal_height` (`number`, default: `15`)
+  - Height of the terminal split used by `FlowRun`.
+- `terminal_position` (`"top" | "bottom"`, default: `"top"`)
+  - Where the terminal split opens.
+- `stop_at_home` (`boolean`, default: `true`)
+  - Stop recursive config search at `$HOME` instead of `/`.
+- `show_command` (`boolean`, default: `true`)
+  - Print resolved command before execution output.
+- `keymaps` (`table`, default: all `nil`)
+  - Optional mappings for:
+    - `run`
+    - `debug`
+    - `toggle_lock`
+    - `preview`
+    - `quickfix`
+  - Set any key to `nil` to leave it unmapped.
+
 ## Commands
 
 - `:FlowRun` - run resolved flow command in a terminal split
@@ -73,7 +108,7 @@ require("nvim-flow").setup({
 
 ## `.flow.yml` format
 
-### Legacy style (still supported)
+### Basic mode
 
 ```yaml
 default:
@@ -86,7 +121,7 @@ main.py:
   cmd: python "{{filepath}}" --mode=dev
 ```
 
-### New `match` style (optional)
+### Advanced match mode
 
 ```yaml
 python-group:

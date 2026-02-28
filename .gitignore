@@ -1,6 +1,7 @@
-/.tests_state
-/.luarocks
-/tmp/
+*.gif
 /*.rockspec
+/.luarocks
+/.tests_state
 /tags
+/tmp/
 tags.*

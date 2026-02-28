@@ -2,6 +2,8 @@
 
 `nvim-flow` is a pure lua Neovim workflow runner for file-based commands defined in `.flow.yml`.
 
+![](https://vhs.charm.sh/vhs-369X8D9r1LiEpAu54jzD7A.gif)
+
 ## Motivation
 
 I wanted a workflow that matches how I actually work in Neovim: simple YAML config, fast command resolution, and quick run/debug feedback without extra runtime dependencies.
@@ -242,6 +244,23 @@ nvim --headless -u tests/minimal_init.lua \
   -c "PlenaryBustedDirectory tests/nvim-flow { minimal_init = 'tests/minimal_init.lua' }" \
   -c "qa"
 ```
+
+## Recording demo GIFs (VHS)
+
+This repo includes a VHS tape at `vhs/nvim-flow-demo.tape` that demonstrates:
+
+- `FlowRun`
+- breakpoint toggle via `<space>db`
+- `FlowDebug` (`nvim-dap`)
+
+Run it with:
+
+```bash
+vhs vhs/nvim-flow-demo.tape
+vhs publish nvim-flow-demo.gif
+```
+
+The tape outputs `vhs/nvim-flow-demo.gif`, which autoplays when embedded in README markdown.
 
 ## Credit
 

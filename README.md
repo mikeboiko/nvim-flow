@@ -2,7 +2,7 @@
 
 `nvim-flow` is a pure lua Neovim workflow runner for file-based commands defined in `.flow.yml`.
 
-![](https://vhs.charm.sh/vhs-369X8D9r1LiEpAu54jzD7A.gif)
+![](https://vhs.charm.sh/vhs-1c3TGRXQMwdq1uelflhnXF.gif)
 
 ## Motivation
 

@@ -155,7 +155,7 @@ function M.preview()
 	if not cmd_def then
 		return
 	end
-	preview.open(cmd_def.cmd, { title = "Flow Preview (" .. cmd_def.source_key .. ")" })
+	preview.open(runner.display_command(cmd_def.cmd), { title = "Flow Preview (" .. cmd_def.source_key .. ")" })
 end
 
 function M.quickfix()

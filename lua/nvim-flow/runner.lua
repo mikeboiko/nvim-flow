@@ -32,6 +32,20 @@ local function max_line_width(lines)
 	return max_width
 end
 
+function M.display_command(cmd)
+	local lines = split_lines(cmd)
+	local start_idx = 1
+	if lines[1] and lines[1]:match("^#!") then
+		start_idx = 2
+	end
+
+	local display_lines = {}
+	for i = start_idx, #lines do
+		table.insert(display_lines, lines[i])
+	end
+	return table.concat(display_lines, "\n")
+end
+
 local function build_script(cmd, show_command)
 	local lines = split_lines(cmd)
 	local hashbang = "#!/usr/bin/env bash"
@@ -57,13 +71,14 @@ local function build_script(cmd, show_command)
 
 	fh:write(hashbang .. "\n")
 	if show_command then
+		local display_cmd = M.display_command(cmd)
 		fh:write("cat <<'NVIM_FLOW_CONTENT_EOF'\n")
-		fh:write(cmd)
-		if cmd:sub(-1) ~= "\n" then
+		fh:write(display_cmd)
+		if display_cmd:sub(-1) ~= "\n" then
 			fh:write("\n")
 		end
 		fh:write("NVIM_FLOW_CONTENT_EOF\n")
-		fh:write(("__nvim_flow_sep_len=%d\n"):format(max_line_width(lines)))
+		fh:write(("__nvim_flow_sep_len=%d\n"):format(max_line_width(split_lines(display_cmd))))
 		fh:write('__nvim_flow_cols=$(tput cols 2>/dev/null || printf "%s" "$__nvim_flow_sep_len")\n')
 		fh:write('case "$__nvim_flow_cols" in ""|*[!0-9]*) __nvim_flow_cols="$__nvim_flow_sep_len" ;; esac\n')
 		fh:write(

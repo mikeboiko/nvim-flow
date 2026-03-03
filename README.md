@@ -7,7 +7,6 @@
 ## Motivation
 
 I wanted a workflow that matches how I actually work in Neovim: simple YAML config, fast command resolution, and quick run/debug feedback without extra runtime dependencies.
-The extra runners (tmux + remote runners) were too complicated for my day-to-day usage, so this project intentionally focuses on the core terminal runner and debug integration.
 
 ## Features
 

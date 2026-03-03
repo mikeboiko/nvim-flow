@@ -218,4 +218,58 @@ json:
 		assert.is_true(contains(cmd_def.cmd, 'curl -k -i -X POST "https://localhost:7125/api/test"'))
 		assert.is_true(contains(cmd_def.cmd, "--data-binary @" .. target))
 	end)
+
+	it("parses keys with inline comments (YAML fold markers)", function()
+		local home = root .. "/home"
+		local repo = home .. "/repo"
+		local src = repo .. "/src"
+		local target = src .. "/tag_generator.py"
+
+		write_file(
+			home .. "/.flow.yml",
+			[[
+py:
+  cmd: echo from-extension
+
+tag_generator.py: # {{{2
+  cmd: echo from-basename-with-comment
+]]
+		)
+
+		write_file(target, "print('hello')\n")
+
+		local cmd_def = assert(config.resolve(target, {
+			config_file = ".flow.yml",
+			stop_at_home = true,
+			home = home,
+		}))
+
+		assert.is_true(contains(cmd_def.cmd, "echo from-basename-with-comment"))
+		assert.are.equal("tag_generator.py", cmd_def.source_key)
+	end)
+
+	it("preserves hash inside quoted scalar values", function()
+		local home = root .. "/home"
+		local repo = home .. "/repo"
+		local src = repo .. "/src"
+		local target = src .. "/run.sh"
+
+		write_file(
+			home .. "/.flow.yml",
+			[[
+sh:
+  cmd: echo "hello # world"
+]]
+		)
+
+		write_file(target, "#!/bin/bash\n")
+
+		local cmd_def = assert(config.resolve(target, {
+			config_file = ".flow.yml",
+			stop_at_home = true,
+			home = home,
+		}))
+
+		assert.is_true(contains(cmd_def.cmd, 'echo "hello # world"'))
+	end)
 end)

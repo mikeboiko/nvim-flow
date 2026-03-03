@@ -59,6 +59,24 @@ local function parse_list(value)
 	return out
 end
 
+local function strip_inline_comment(text)
+	local in_single = false
+	local in_double = false
+	for i = 1, #text do
+		local ch = text:sub(i, i)
+		if ch == "'" and not in_double then
+			in_single = not in_single
+		elseif ch == '"' and not in_single then
+			in_double = not in_double
+		elseif ch == "#" and not in_single and not in_double then
+			if i == 1 or text:sub(i - 1, i - 1):match("%s") then
+				return trim(text:sub(1, i - 1))
+			end
+		end
+	end
+	return text
+end
+
 local function parse_scalar(value)
 	value = trim(value)
 	if value == "" then
@@ -178,6 +196,7 @@ local function parse_map(lines, index, indent)
 			end
 
 			key = trim(key)
+			rest = strip_inline_comment(rest)
 			if rest == "|" or rest == "|-" or rest == "|+" then
 				local block, next_i = collect_block(lines, i + 1, line_indent)
 				set_map_key(map, key, block)

@@ -7,21 +7,23 @@ Set Height 700
 Set Padding 20
 Set TypingSpeed 70ms
 
+# Open the demo file
 Type "cd ~/demo"
 Enter
 Sleep 800ms
 
 Type "nvim test.py"
 Enter
-Sleep 2s
+Sleep 1s
 
+# Run the resolved command
 Type ":FlowRun"
 Enter
 Sleep 3s
 
-Type "gg"
-Sleep 300ms
-Type "j"
+# Set a breakpoint and debug
+# Move to the print line
+Type "6j"
 Sleep 300ms
 Type " db"
 Sleep 1s

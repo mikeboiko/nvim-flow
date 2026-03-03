@@ -2,7 +2,18 @@
 
 `nvim-flow` is a pure lua Neovim workflow runner for file-based commands defined in `.flow.yml`.
 
-![](https://vhs.charm.sh/vhs-1c3TGRXQMwdq1uelflhnXF.gif)
+## Quick start
+
+Create a `.flow.yml` next to your project files:
+
+```yaml
+test.py:
+  cmd: python "{{filepath}}" --name mike
+```
+
+Open the file in Neovim and run `:FlowRun` — nvim-flow resolves the command for the current file and executes it in a terminal split:
+
+![](https://vhs.charm.sh/vhs-2XDFKPd2aLLfBIg5KhkTz0.gif)
 
 ## Motivation
 
@@ -242,11 +253,13 @@ nvim --headless -u tests/minimal_init.lua \
 
 ## Recording demo GIFs (VHS)
 
-This repo includes a VHS tape at `vhs/nvim-flow-demo.tape` that demonstrates:
+This repo includes a VHS tape at `vhs/nvim-flow-demo.tape` that records a demo using `~/demo/test.py` and `~/demo/.flow.yml`.
 
-- `FlowRun`
-- breakpoint toggle via `<space>db`
-- `FlowDebug` (`nvim-dap`)
+The demo shows:
+
+1. `:FlowPreview` — floating window with the resolved command
+2. `:FlowRun` — execute the command in a terminal split
+3. Set a breakpoint with `<space>db`, then `:FlowDebug` (`nvim-dap`)
 
 Run it with:
 

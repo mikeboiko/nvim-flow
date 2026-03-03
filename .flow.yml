@@ -1,0 +1,2 @@
+tape:
+  cmd: vhs {{filepath}}

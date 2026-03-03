@@ -12,8 +12,10 @@ local function normalize_arg(arg)
 	if not arg then
 		return arg
 	end
-	local normalized = arg:gsub("^'({.-})'$", "%1")
-	return normalized
+	arg = arg:gsub("^'({.-})'$", "%1")
+	arg = arg:gsub('^"(.-)"$', "%1")
+	arg = arg:gsub("^'(.-)'$", "%1")
+	return arg
 end
 
 local function command_line_from_script(cmd)
@@ -84,8 +86,8 @@ local function parse_command(cmd)
 
 	return {
 		adapter = adapter,
-		program = program,
-		module = module,
+		program = normalize_arg(program),
+		module = normalize_arg(module),
 		args = args,
 	}
 end

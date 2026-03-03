@@ -41,6 +41,19 @@ describe("nvim-flow debug runner", function()
 		assert.are.same({ "--foo", "bar" }, cfg.args)
 	end)
 
+	it("strips quotes from program path in flow command", function()
+		local ok = debug_runner.run({
+			cmd = '#!/usr/bin/env bash\npython "/tmp/example.py" --name value',
+			filepath = "/tmp/example.py",
+		})
+
+		assert.is_true(ok)
+		local cfg = package.loaded.dap.configurations[vim.bo.filetype][1]
+		assert.are.equal("python", cfg.type)
+		assert.are.equal("/tmp/example.py", cfg.program)
+		assert.are.same({ "--name", "value" }, cfg.args)
+	end)
+
 	it("falls through to dap.continue for unrecognized commands like dotnet", function()
 		local continued = false
 		package.loaded.dap.continue = function()

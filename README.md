@@ -11,7 +11,7 @@ test.py:
   cmd: python "{{filepath}}" --name mike
 ```
 
-Open the file in Neovim and run `:FlowRun` — nvim-flow resolves the command for the current file and executes it in a terminal split:
+Open the file in Neovim and run `:FlowRun` or `:FlowDebug` — nvim-flow resolves the command for the current file and executes it in a terminal split:
 
 ![](https://vhs.charm.sh/vhs-2XDFKPd2aLLfBIg5KhkTz0.gif)
 
@@ -257,9 +257,8 @@ This repo includes a VHS tape at `vhs/nvim-flow-demo.tape` that records a demo u
 
 The demo shows:
 
-1. `:FlowPreview` — floating window with the resolved command
-2. `:FlowRun` — execute the command in a terminal split
-3. Set a breakpoint with `<space>db`, then `:FlowDebug` (`nvim-dap`)
+1. `:FlowRun` — execute the command in a terminal split
+2. Set a breakpoint with `<space>db`, then `:FlowDebug` (`nvim-dap`)
 
 Run it with:
 

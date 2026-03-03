@@ -25,6 +25,8 @@ It resolves a command for the current file from YAML config and runs it in a Neo
   - flow terminal buffers are tagged with `b:nvim_flow_terminal = 1` for reliable external cleanup integrations
 - `lua/nvim-flow/debug_runner.lua`
   - built-in flow command parser + nvim-dap launch config assembly
+  - recognizes `python`/`python3`, `uv`, and node commands for automatic DAP config generation
+  - for unrecognized commands (e.g. `dotnet run`), falls through to `dap.continue()` so existing user-configured `dap.configurations` are used
 - `lua/nvim-flow/preview.lua`
   - floating command preview window
 - `lua/nvim-flow/quickfix.lua`

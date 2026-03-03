@@ -40,4 +40,24 @@ describe("nvim-flow debug runner", function()
 		assert.are.equal("app.main", cfg.module)
 		assert.are.same({ "--foo", "bar" }, cfg.args)
 	end)
+
+	it("falls through to dap.continue for unrecognized commands like dotnet", function()
+		local continued = false
+		package.loaded.dap.continue = function()
+			continued = true
+		end
+		-- Pre-populate a config to verify it is NOT overwritten
+		package.loaded.dap.configurations.cs = { { type = "netcoredbg", name = "existing" } }
+
+		vim.bo.filetype = "cs"
+		local ok = debug_runner.run({
+			cmd = "#!/usr/bin/env bash\ndotnet run",
+			filepath = "/tmp/Controllers/TestController.cs",
+		})
+
+		assert.is_true(ok)
+		assert.is_true(continued)
+		-- Existing config should be preserved (not replaced)
+		assert.are.equal("netcoredbg", package.loaded.dap.configurations.cs[1].type)
+	end)
 end)

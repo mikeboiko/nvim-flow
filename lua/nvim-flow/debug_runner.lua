@@ -159,19 +159,20 @@ function M.run(cmd_def)
 
 	local parsed = parse_command(cmd_def.cmd)
 	if not parsed then
-		vim.notify("nvim-flow: unable to parse debug command from flow cmd", vim.log.levels.ERROR)
-		return false
+		-- Unrecognized command (e.g. dotnet); fall through to existing dap config
+		dap.continue()
+		return true
 	end
 
 	local config = build_adapter_config(parsed, cmd_def)
 	if not config then
-		vim.notify("nvim-flow: unsupported debug adapter for flow command", vim.log.levels.ERROR)
-		return false
+		dap.continue()
+		return true
 	end
 
 	if not config.module and not config.program then
-		vim.notify("nvim-flow: debug command must resolve to program or module", vim.log.levels.ERROR)
-		return false
+		dap.continue()
+		return true
 	end
 
 	local filetype = vim.bo.filetype

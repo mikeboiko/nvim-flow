@@ -272,4 +272,42 @@ sh:
 
 		assert.is_true(contains(cmd_def.cmd, 'echo "hello # world"'))
 	end)
+
+	it("finds source flow file and line for resolved key", function()
+		local home = root .. "/home"
+		local repo = home .. "/repo"
+		local src = repo .. "/tasks"
+		local target = src .. "/sync.yaml"
+
+		write_file(
+			home .. "/.flow.yml",
+			[[
+default:
+  cmd: echo home-default
+]]
+		)
+
+		write_file(
+			repo .. "/.flow.yml",
+			[[
+# repo-specific tasks
+
+sync.yaml:
+  cmd: bash ./ansible-run.sh --tags "sync"
+]]
+		)
+
+		write_file(target, "hosts: []\n")
+
+		local cmd_def = assert(config.resolve(target, {
+			config_file = ".flow.yml",
+			stop_at_home = true,
+			home = home,
+		}))
+		assert.are.equal("sync.yaml", cmd_def.source_key)
+
+		local location = assert(config.find_source_location(cmd_def.source_key, cmd_def.source_files))
+		assert.are.equal(repo .. "/.flow.yml", location.file)
+		assert.are.equal(4, location.line)
+	end)
 end)

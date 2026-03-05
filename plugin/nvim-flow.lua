@@ -25,6 +25,10 @@ vim.api.nvim_create_user_command("FlowPreview", function()
 	flow.preview()
 end, {})
 
+vim.api.nvim_create_user_command("FlowEdit", function()
+	flow.edit()
+end, {})
+
 vim.api.nvim_create_user_command("FlowQuickfix", function()
 	flow.quickfix()
 end, {})

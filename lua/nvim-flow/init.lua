@@ -11,11 +11,13 @@ local defaults = {
 	config_file = ".flow.yml",
 	terminal_height = 15,
 	terminal_position = "top",
+	edit_open_command = "tabedit",
 	stop_at_home = true,
 	show_command = true,
 	keymaps = {
 		run = nil,
 		debug = nil,
+		edit = nil,
 		toggle_lock = nil,
 		preview = nil,
 		quickfix = nil,
@@ -101,6 +103,12 @@ local function setup_keymaps()
 		end, { silent = true, desc = "Flow debug" })
 	end
 
+	if keymaps.edit then
+		vim.keymap.set("n", keymaps.edit, function()
+			require("nvim-flow").edit()
+		end, { silent = true, desc = "Flow edit" })
+	end
+
 	if keymaps.toggle_lock then
 		vim.keymap.set("n", keymaps.toggle_lock, function()
 			require("nvim-flow").toggle_lock()
@@ -156,6 +164,31 @@ function M.preview()
 		return
 	end
 	preview.open(runner.display_command(cmd_def.cmd), { title = "Flow Preview (" .. cmd_def.source_key .. ")" })
+end
+
+function M.edit()
+	local cmd_def = resolve_cmd_def()
+	if not cmd_def then
+		return
+	end
+
+	local location, location_err = config.find_source_location(cmd_def.source_key, cmd_def.source_files)
+	if not location then
+		notify(location_err, vim.log.levels.ERROR)
+		return
+	end
+
+	local open_cmd = state.opts.edit_open_command or "tabedit"
+	local escaped_path = vim.fn.fnameescape(location.file)
+	local opened, open_err = pcall(vim.cmd, ("%s %s"):format(open_cmd, escaped_path))
+	if not opened then
+		notify(("failed to open flow file via `%s`: %s"):format(open_cmd, open_err), vim.log.levels.ERROR)
+		return
+	end
+
+	local line = tonumber(location.line) or 1
+	pcall(vim.api.nvim_win_set_cursor, 0, { math.max(line, 1), 0 })
+	vim.cmd("normal! zz")
 end
 
 function M.quickfix()

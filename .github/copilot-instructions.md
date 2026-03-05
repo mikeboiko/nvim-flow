@@ -32,7 +32,7 @@ It resolves a command for the current file from YAML config and runs it in a Neo
 - `lua/nvim-flow/quickfix.lua`
   - Python traceback parser -> quickfix list
 - `plugin/nvim-flow.lua`
-  - user command registration (`FlowRun`, `FlowDebug`, etc.)
+  - user command registration (`FlowRun`, `FlowDebug`, `FlowEdit`, etc.)
 
 ## Config behavior (important)
 
@@ -40,6 +40,7 @@ It resolves a command for the current file from YAML config and runs it in a Neo
 - Discovery walks from current file's directory upward to `$HOME` (if `stop_at_home = true`).
 - All found files are merged.
 - Closer files take precedence over farther files.
+- `FlowEdit` uses resolved `source_key` + nearest defining config file to jump to the matched `.flow.yml` line.
 - Matching priority:
   1. basename
   2. `match:` entries

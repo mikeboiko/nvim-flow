@@ -22,6 +22,7 @@ I wanted a workflow that matches how I actually work in Neovim: simple YAML conf
 ## Features
 
 - First-class `nvim-dap` integration through `FlowDebug`
+- Flow source jump (`:FlowEdit`) to open the matched `.flow.yml` definition
 - File lock support (`:FlowToggleLock`)
 - Command preview in a floating window (`:FlowPreview`)
 - Python traceback -> quickfix parser (`:FlowQuickfix`)
@@ -47,16 +48,18 @@ return {
   {
     "mikeboiko/nvim-flow",
     event = { "BufReadPost", "BufNewFile" },
-    cmd = { "FlowRun", "FlowDebug", "FlowToggleLock", "FlowPreview", "FlowQuickfix" },
+    cmd = { "FlowRun", "FlowDebug", "FlowEdit", "FlowToggleLock", "FlowPreview", "FlowQuickfix" },
     opts = {
       config_file = ".flow.yml",
       terminal_height = 15,
       terminal_position = "top",
+      edit_open_command = "tabedit",
       stop_at_home = true,
       show_command = true,
       keymaps = {
         run = "<CR>",
         debug = "<leader>fd",
+        edit = "<leader>fe",
         toggle_lock = "<leader>fl",
         preview = "<leader>fp",
         quickfix = "<leader>fq",
@@ -76,11 +79,13 @@ require("nvim-flow").setup({
   config_file = ".flow.yml",
   terminal_height = 15,
   terminal_position = "top", -- "top" | "bottom"
+  edit_open_command = "tabedit", -- e.g. "tabedit" | "edit" | "split" | "vsplit"
   stop_at_home = true,
   show_command = true,
   keymaps = {
     run = nil,
     debug = nil,
+    edit = nil, -- suggested: "<leader>fe"
     toggle_lock = nil,
     preview = nil,
     quickfix = nil,
@@ -96,6 +101,8 @@ require("nvim-flow").setup({
   - Height of the terminal split used by `FlowRun`.
 - `terminal_position` (`"top" | "bottom"`, default: `"top"`)
   - Where the terminal split opens.
+- `edit_open_command` (`string`, default: `"tabedit"`)
+  - Vim command used by `FlowEdit` to open the matched `.flow.yml` location (for example: `tabedit`, `edit`, `split`, `vsplit`).
 - `stop_at_home` (`boolean`, default: `true`)
   - Stop recursive config search at `$HOME` instead of `/`.
 - `show_command` (`boolean`, default: `true`)
@@ -104,6 +111,7 @@ require("nvim-flow").setup({
   - Optional mappings for:
     - `run`
     - `debug`
+    - `edit`
     - `toggle_lock`
     - `preview`
     - `quickfix`
@@ -113,10 +121,17 @@ require("nvim-flow").setup({
 
 - `:FlowRun` - run resolved flow command in a terminal split
 - `:FlowDebug` - resolve the same flow command and launch a matching `nvim-dap` debug session
+- `:FlowEdit` - open the matched `.flow.yml` file and jump to the resolved command line
 - `:FlowToggleLock[ {filepath}]` - toggle lock (or set lock to explicit path)
 - `:FlowSet {filepath}` - compatibility alias for setting lock directly
 - `:FlowPreview` - show resolved command for current (or locked) file
 - `:FlowQuickfix` - parse the last flow output as Python traceback and fill quickfix
+
+## FlowEdit behavior
+
+`FlowEdit` follows the same resolution pipeline as `FlowRun` / `FlowPreview`, then opens the corresponding `.flow.yml` and jumps to the resolved command line.
+
+By default it opens in a new tab (`edit_open_command = "tabedit"`). Change `edit_open_command` if you prefer `edit`, `split`, or `vsplit`.
 
 ## Debug integration (`nvim-dap`)
 

@@ -111,6 +111,43 @@ local function file_exists(filepath)
 	return uv.fs_stat(filepath) ~= nil
 end
 
+local function escape_lua_pattern(text)
+	return (text:gsub("([^%w])", "%%%1"))
+end
+
+local function count_indent(line)
+	local _, finish = line:find("^%s*")
+	return finish or 0
+end
+
+local function find_top_level_key_line(lines, key)
+	local key_pattern = "^" .. escape_lua_pattern(key) .. ":%s*"
+	for idx, line in ipairs(lines) do
+		if line:match(key_pattern) then
+			return idx
+		end
+	end
+	return nil
+end
+
+local function find_cmd_line_in_key_block(lines, key_line)
+	local key_indent = count_indent(lines[key_line] or "")
+	for idx = key_line + 1, #lines do
+		local line = lines[idx]
+		local line_trim = trim(line)
+		if line_trim ~= "" then
+			local line_indent = count_indent(line)
+			if line_indent <= key_indent then
+				break
+			end
+			if line_trim:match("^cmd:%s*") then
+				return idx
+			end
+		end
+	end
+	return key_line
+end
+
 function M.find_config_files(filepath, opts)
 	opts = opts or {}
 
@@ -169,6 +206,32 @@ function M.load_merged(filepath, opts)
 		merged = deep_merge(merged, parsed)
 	end
 	return merged, files
+end
+
+function M.find_source_location(source_key, source_files)
+	if type(source_key) ~= "string" or source_key == "" then
+		return nil, "invalid flow source key"
+	end
+	if type(source_files) ~= "table" or #source_files == 0 then
+		return nil, "no source flow files available"
+	end
+
+	for _, flow_file in ipairs(source_files) do
+		local ok, lines = pcall(vim.fn.readfile, flow_file)
+		if not ok then
+			return nil, ("failed reading %s"):format(flow_file)
+		end
+		local key_line = find_top_level_key_line(lines, source_key)
+		if key_line then
+			local line = find_cmd_line_in_key_block(lines, key_line)
+			return {
+				file = flow_file,
+				line = line,
+			}
+		end
+	end
+
+	return nil, ("unable to locate `%s` in resolved flow files"):format(source_key)
 end
 
 local function has_glob(pattern)

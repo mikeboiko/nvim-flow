@@ -57,7 +57,7 @@ It resolves a command for the current file from YAML config and runs it in a Neo
 - `yaml.lua` tracks key order in `__order`.
 - `config.lua` uses that order when evaluating `match` entries.
 - For merged files, closer file keys are promoted ahead of farther keys to keep "closer wins" deterministic.
-- If you touch merge/match logic, update tests in `tests/nvim-flow/config_spec.lua`.
+- Parser edge-case coverage lives in `tests/nvim-flow/yaml_spec.lua`; resolution/merge behavior lives in `tests/nvim-flow/config_spec.lua`.
 
 ## Template variables
 

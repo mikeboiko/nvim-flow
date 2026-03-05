@@ -219,6 +219,40 @@ json:
 		assert.is_true(contains(cmd_def.cmd, "--data-binary @" .. target))
 	end)
 
+	it("handles inline multiline scalar continuations without truncating later keys", function()
+		local home = root .. "/home"
+		local repo = home .. "/repo"
+		local src = repo .. "/src"
+		local target = src .. "/sVar.py"
+
+		write_file(
+			home .. "/.flow.yml",
+			[[
+ioCombine.py:
+  cmd: python {{filepath}} -c /tmp/iGet.xlsx
+    -p /tmp/sVar.xlsx
+    -o /tmp/IO.xlsx
+
+sVar.py:
+  cmd: bash ~/git/Yokogawa/Common/scripts/run_svar.sh
+
+py:
+  cmd: python {{filepath}}
+]]
+		)
+
+		write_file(target, "print('hello')\n")
+
+		local cmd_def = assert(config.resolve(target, {
+			config_file = ".flow.yml",
+			stop_at_home = true,
+			home = home,
+		}))
+
+		assert.are.equal("sVar.py", cmd_def.source_key)
+		assert.is_true(contains(cmd_def.cmd, "run_svar.sh"))
+	end)
+
 	it("parses keys with inline comments (YAML fold markers)", function()
 		local home = root .. "/home"
 		local repo = home .. "/repo"
@@ -273,6 +307,94 @@ sh:
 		assert.is_true(contains(cmd_def.cmd, 'echo "hello # world"'))
 	end)
 
+	it("keeps URL fragments while stripping trailing inline comments", function()
+		local home = root .. "/home"
+		local repo = home .. "/repo"
+		local src = repo .. "/src"
+		local target = src .. "/worker.py"
+
+		write_file(
+			home .. "/.flow.yml",
+			[[
+py:
+  cmd: curl https://example.com/#frag --name value # this is a comment
+]]
+		)
+
+		write_file(target, "print('hello')\n")
+
+		local cmd_def = assert(config.resolve(target, {
+			config_file = ".flow.yml",
+			stop_at_home = true,
+			home = home,
+		}))
+
+		assert.is_true(contains(cmd_def.cmd, "https://example.com/#frag"))
+		assert.is_false(contains(cmd_def.cmd, "this is a comment"))
+	end)
+
+	it("parses match arrays with commas inside quoted elements", function()
+		local home = root .. "/home"
+		local repo = home .. "/repo"
+		local src = repo .. "/src"
+		local target = src .. "/worker.py"
+
+		write_file(
+			home .. "/.flow.yml",
+			[[
+python-group:
+  match: ["foo,bar", py]
+  cmd: echo from-match
+default:
+  cmd: echo default
+]]
+		)
+
+		write_file(target, "print('hello')\n")
+
+		local cmd_def = assert(config.resolve(target, {
+			config_file = ".flow.yml",
+			stop_at_home = true,
+			home = home,
+		}))
+
+		assert.are.equal("python-group", cmd_def.source_key)
+		assert.is_true(contains(cmd_def.cmd, "echo from-match"))
+	end)
+
+	it("handles top-level comments after inline continuation and still parses later keys", function()
+		local home = root .. "/home"
+		local repo = home .. "/repo"
+		local src = repo .. "/src"
+		local target = src .. "/sVar.py"
+
+		write_file(
+			home .. "/.flow.yml",
+			[[
+ioCombine.py:
+  cmd: python {{filepath}} -c /tmp/iGet.xlsx
+    -p /tmp/sVar.xlsx
+    -o /tmp/IO.xlsx
+# comment between entries
+sVar.py:
+  cmd: bash /tmp/run_svar.sh
+py:
+  cmd: python {{filepath}}
+]]
+		)
+
+		write_file(target, "print('hello')\n")
+
+		local cmd_def = assert(config.resolve(target, {
+			config_file = ".flow.yml",
+			stop_at_home = true,
+			home = home,
+		}))
+
+		assert.are.equal("sVar.py", cmd_def.source_key)
+		assert.is_true(contains(cmd_def.cmd, "run_svar.sh"))
+	end)
+
 	it("finds source flow file and line for resolved key", function()
 		local home = root .. "/home"
 		local repo = home .. "/repo"
@@ -305,6 +427,45 @@ sync.yaml:
 			home = home,
 		}))
 		assert.are.equal("sync.yaml", cmd_def.source_key)
+
+		local location = assert(config.find_source_location(cmd_def.source_key, cmd_def.source_files))
+		assert.are.equal(repo .. "/.flow.yml", location.file)
+		assert.are.equal(4, location.line)
+	end)
+
+	it("finds source location in nearest file and jumps to cmd when cmd is not first field", function()
+		local home = root .. "/home"
+		local repo = home .. "/repo"
+		local src = repo .. "/tasks"
+		local target = src .. "/sync.yaml"
+
+		write_file(
+			home .. "/.flow.yml",
+			[[
+sync.yaml:
+  cmd: echo home-sync
+]]
+		)
+
+		write_file(
+			repo .. "/.flow.yml",
+			[[
+# repo-specific tasks
+sync.yaml:
+  runner: terminal
+  cmd: echo repo-sync
+]]
+		)
+
+		write_file(target, "hosts: []\n")
+
+		local cmd_def = assert(config.resolve(target, {
+			config_file = ".flow.yml",
+			stop_at_home = true,
+			home = home,
+		}))
+		assert.are.equal("sync.yaml", cmd_def.source_key)
+		assert.is_true(contains(cmd_def.cmd, "echo repo-sync"))
 
 		local location = assert(config.find_source_location(cmd_def.source_key, cmd_def.source_files))
 		assert.are.equal(repo .. "/.flow.yml", location.file)

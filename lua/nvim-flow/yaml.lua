@@ -151,6 +151,17 @@ local function collect_block(lines, index, parent_indent)
 	return table.concat(out, "\n"), i
 end
 
+local function collect_inline_continuation(lines, index, parent_indent)
+	local block, next_i = collect_block(lines, index, parent_indent)
+	if block == "" then
+		return "", next_i
+	end
+
+	-- YAML plain multiline scalars fold newlines into spaces.
+	local folded = trim(block:gsub("\n", " "))
+	return folded, next_i
+end
+
 local function set_map_key(map, key, value)
 	local order = rawget(map, "__order")
 	if type(order) ~= "table" then
@@ -202,8 +213,13 @@ local function parse_map(lines, index, indent)
 				set_map_key(map, key, block)
 				i = next_i
 			elseif rest ~= "" then
-				set_map_key(map, key, parse_scalar(rest))
-				i = i + 1
+				local value = parse_scalar(rest)
+				local continuation, next_i = collect_inline_continuation(lines, i + 1, line_indent)
+				if type(value) == "string" and continuation ~= "" then
+					value = trim(value .. " " .. continuation)
+				end
+				set_map_key(map, key, value)
+				i = next_i
 			else
 				local j = i + 1
 				while j <= #lines do

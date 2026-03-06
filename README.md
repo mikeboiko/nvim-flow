@@ -9,7 +9,7 @@
 Create a `.flow.yml` next to your project files:
 
 ```yaml
-test.py:
+demo.py:
   cmd: python "{{filepath}}" --name mike
 ```
 
@@ -23,7 +23,7 @@ I wanted a workflow that matches how I actually work in Neovim: simple YAML conf
 
 ## Features
 
-- First-class `nvim-dap` integration through `FlowDebug`
+- First-class `nvim-dap` integration through `:FlowDebug`
 - Flow source jump (`:FlowEdit`) to open the matched `.flow.yml` definition
 - File lock support (`:FlowToggleLock`)
 - Command preview in a floating window (`:FlowPreview`)
@@ -270,7 +270,7 @@ nvim --headless -u tests/minimal_init.lua \
 
 ## Recording demo GIFs (VHS)
 
-This repo includes a VHS tape at `vhs/nvim-flow-demo.tape` that records a demo using `~/demo/test.py` and `~/demo/.flow.yml`.
+This repo includes a VHS tape at `vhs/nvim-flow-demo.tape` that records a demo using `./vhs/demo.py` and `.flow.yml`.
 
 The demo shows:
 

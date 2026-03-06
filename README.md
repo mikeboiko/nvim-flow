@@ -1,5 +1,7 @@
 # nvim-flow
 
+[![CI](https://github.com/mikeboiko/nvim-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/mikeboiko/nvim-flow/actions/workflows/ci.yml)
+
 `nvim-flow` is a pure lua Neovim workflow runner for file-based commands defined in `.flow.yml`.
 
 ## Quick start

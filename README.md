@@ -15,7 +15,7 @@ test.py:
 
 Open the file in Neovim and run `:FlowRun` or `:FlowDebug` — nvim-flow resolves the command for the current file and executes it in a terminal split:
 
-![](https://vhs.charm.sh/vhs-2XDFKPd2aLLfBIg5KhkTz0.gif)
+![](https://vhs.charm.sh/vhs-5wLUhySW1bp6mOc67KGcET.gif)
 
 ## Motivation
 

@@ -5,14 +5,14 @@ Set FontSize 18
 Set Width 1000
 Set Height 700
 Set Padding 20
-Set TypingSpeed 70ms
+Set TypingSpeed 60ms
 
 # Open the demo file
-Type "cd ~/demo"
+Type "cd ~/git/nvim-flow/vhs"
 Enter
 Sleep 800ms
 
-Type "nvim test.py"
+Type "nvim demo.py"
 Enter
 Sleep 1s
 

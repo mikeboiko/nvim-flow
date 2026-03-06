@@ -1,2 +1,5 @@
 tape:
   cmd: vhs {{filepath}}
+
+demo.py:
+  cmd: python {{filepath}} --name mike

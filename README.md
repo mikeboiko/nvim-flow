@@ -21,6 +21,25 @@ Open the file in Neovim and run `:FlowRun` or `:FlowDebug` — nvim-flow resolve
 
 I wanted a workflow that matches how I actually work in Neovim: simple YAML config, fast command resolution, and quick run/debug feedback without extra runtime dependencies.
 
+## Comparison with similar plugins
+
+| Feature                | **nvim-flow**                         | [overseer.nvim](https://github.com/stevearc/overseer.nvim) | [code_runner.nvim](https://github.com/CRAG666/code_runner.nvim) | [zuzu.nvim](https://github.com/gitpushjoe/zuzu.nvim) |
+| ---------------------- | ------------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------- |
+| Config format          | YAML (`.flow.yml`)                    | Lua / VS Code `tasks.json`                                 | Lua / JSON                                                      | Lua                                                  |
+| Per-file command args  | ✅ native in YAML                     | ⚠️ requires custom templates                               | ❌ filetype-level only                                          | ⚠️ via profiles                                      |
+| Recursive config merge | ✅ dir → `$HOME`                      | ❌                                                         | ❌                                                              | ❌                                                   |
+| `nvim-dap` integration | ✅ built-in `:FlowDebug`              | ✅ via `preLaunchTask`                                     | ❌                                                              | ❌                                                   |
+| Quickfix integration   | ✅ Python traceback                   | ✅ generic output parsing                                  | ❌                                                              | ✅ diagnostics                                       |
+| Command preview        | ✅ floating window                    | ❌                                                         | ❌                                                              | ❌                                                   |
+| Jump to config source  | ✅ `:FlowEdit`                        | ❌                                                         | ❌                                                              | ❌                                                   |
+| Match resolution       | basename / glob / ext / folder / repo | manual task selection                                      | filetype-based                                                  | filetype + dir depth                                 |
+| Multi-step workflows   | ❌                                    | ✅                                                         | ❌                                                              | ❌                                                   |
+| VS Code tasks compat   | ❌                                    | ✅                                                         | ✅ JSON import                                                  | ❌                                                   |
+| Dependencies           | none (pure Lua)                       | none (pure Lua)                                            | none (pure Lua)                                                 | none (pure Lua)                                      |
+| Setup complexity       | low — one YAML file                   | high — Lua templates + ECS components                      | low — Lua table                                                 | medium — Lua profiles + hooks                        |
+
+**Why nvim-flow?** If you run the same file with different arguments across projects and want those profiles stored in a simple, versionable YAML file next to your code — nvim-flow is the lightest path. overseer.nvim is the better choice for complex multi-step build pipelines or VS Code compatibility. code_runner.nvim works well if filetype-level granularity is sufficient. zuzu.nvim offers advanced profile resolution but has a steeper learning curve.
+
 ## Features
 
 - First-class `nvim-dap` integration through `:FlowDebug`

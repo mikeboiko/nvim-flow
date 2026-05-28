@@ -103,4 +103,49 @@ sVar.py:
 
 		assert.are.equal("bash /tmp/run_svar.sh", parsed["sVar.py"].cmd)
 	end)
+
+	it("parses block-style sequences (- item syntax)", function()
+		local parsed = assert(yaml.decode([[
+centum_blocks.py:
+  match:
+    - '**/rpa/centum/blocks.py'
+    - '**/rpa/centum/config/blocks.yaml'
+  cmd: echo hello
+]]))
+
+		assert.are.same(
+			{ "**/rpa/centum/blocks.py", "**/rpa/centum/config/blocks.yaml" },
+			parsed["centum_blocks.py"].match
+		)
+		assert.are.equal("echo hello", parsed["centum_blocks.py"].cmd)
+	end)
+
+	it("parses block-style sequences with unquoted items", function()
+		local parsed = assert(yaml.decode([[
+python-group:
+  match:
+    - py
+    - pyw
+  cmd: python "{{filepath}}"
+]]))
+
+		assert.are.same({ "py", "pyw" }, parsed["python-group"].match)
+	end)
+
+	it("parses block-style sequences followed by other keys at same level", function()
+		local parsed = assert(yaml.decode([[
+entry:
+  match:
+    - foo
+    - bar
+  cmd: echo matched
+
+other.py:
+  cmd: echo other
+]]))
+
+		assert.are.same({ "foo", "bar" }, parsed["entry"].match)
+		assert.are.equal("echo matched", parsed["entry"].cmd)
+		assert.are.equal("echo other", parsed["other.py"].cmd)
+	end)
 end)

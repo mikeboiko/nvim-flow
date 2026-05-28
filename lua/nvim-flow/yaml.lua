@@ -180,6 +180,35 @@ local function set_map_key(map, key, value)
 	map[key] = value
 end
 
+local function parse_sequence(lines, index, parent_indent)
+	local list = {}
+	local i = index
+
+	while i <= #lines do
+		local line = lines[i]
+		local line_trim = trim(line)
+
+		if line_trim == "" or line_trim:sub(1, 1) == "#" then
+			i = i + 1
+		else
+			local line_indent = count_indent(line)
+			if line_indent <= parent_indent then
+				break
+			end
+
+			local item_value = line_trim:match("^-%s+(.*)$")
+			if not item_value then
+				break
+			end
+
+			table.insert(list, parse_scalar(strip_inline_comment(item_value)))
+			i = i + 1
+		end
+	end
+
+	return list, i
+end
+
 local function parse_map(lines, index, indent)
 	local map = {}
 	local i = index
@@ -241,7 +270,11 @@ local function parse_map(lines, index, indent)
 						i = j
 					else
 						local next_trim = trim(lines[j])
-						if next_trim:match("^[%w_.-]+:%s*.*$") then
+						if next_trim:match("^-%s+") or next_trim == "-" then
+							local seq, seq_next = parse_sequence(lines, j, line_indent)
+							set_map_key(map, key, seq)
+							i = seq_next
+						elseif next_trim:match("^[%w_.-]+:%s*.*$") then
 							local child, err_or_next = parse_map(lines, j, next_indent)
 							if not child then
 								return nil, err_or_next

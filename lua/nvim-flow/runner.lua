@@ -146,6 +146,14 @@ local function build_buffer_header(cmd)
 	return header
 end
 
+local function build_buffer_name(cmd_def, exit_code)
+	local source_key = cmd_def.source_key or "run"
+	if exit_code and exit_code ~= 0 then
+		return ("flow://%s (%d)"):format(source_key, exit_code)
+	end
+	return "flow://" .. source_key
+end
+
 local function run_buffer(cmd_def, opts)
 	local show_command = opts.show_command ~= false
 	local terminal_height = tonumber(opts.terminal_height) or 15
@@ -167,7 +175,7 @@ local function run_buffer(cmd_def, opts)
 	vim.bo[buf].buftype = "nofile"
 	vim.bo[buf].bufhidden = "wipe"
 	vim.bo[buf].swapfile = false
-	local buf_name = "flow://" .. (cmd_def.source_key or "run")
+	local buf_name = build_buffer_name(cmd_def)
 	pcall(vim.api.nvim_buf_set_name, buf, buf_name)
 
 	local buf_win
@@ -288,8 +296,6 @@ local function run_buffer(cmd_def, opts)
 		end
 		lines = filtered
 
-		table.insert(lines, ("[Process exited %d]"):format(exit_code))
-
 		local all_lines = {}
 		for _, hl in ipairs(header_lines) do
 			table.insert(all_lines, hl)
@@ -303,6 +309,7 @@ local function run_buffer(cmd_def, opts)
 		M.last_output_lines = ansi.strip_lines(vim.deepcopy(all_lines))
 
 		if vim.api.nvim_buf_is_valid(buf) then
+			pcall(vim.api.nvim_buf_set_name, buf, build_buffer_name(cmd_def, exit_code))
 			local display_lines = ansi.strip_lines(vim.deepcopy(all_lines))
 			vim.bo[buf].modifiable = true
 			vim.api.nvim_buf_set_lines(buf, 0, -1, false, display_lines)

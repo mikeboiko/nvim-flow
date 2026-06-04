@@ -206,12 +206,10 @@ describe("nvim-flow runner", function()
 				found = true
 				break
 			end
+			assert.is_falsy(line:find("%[Process exited %d+%]"))
 		end
 		assert.is_true(found, "expected 'hello-flow' in output lines")
-
-		-- Should end with process exit line
-		local last = runner.last_output_lines[#runner.last_output_lines]
-		assert.is_truthy(last:find("%[Process exited %d+%]"))
+		assert.are.equal("flow://run", vim.api.nvim_buf_get_name(runner.last_terminal_buf))
 	end)
 
 	it("show_command in buffer mode strips shebang and adds Lua-generated separator", function()
@@ -226,13 +224,14 @@ describe("nvim-flow runner", function()
 		end
 	end)
 
-	it("buffer mode nonzero exit still leaves output visible with exit status", function()
+	it("buffer mode nonzero exit renames the buffer and keeps output visible", function()
 		vim.cmd("edit " .. vim.fn.fnameescape(target))
 
 		local ok = runner.run({
 			cmd = "#!/usr/bin/env bash\necho failing && exit 42",
 			filepath = target,
 			runner = "terminal",
+			source_key = "sh",
 		}, {
 			output_mode = "buffer",
 			terminal_height = 5,
@@ -244,8 +243,11 @@ describe("nvim-flow runner", function()
 			return #runner.last_output_lines > 0
 		end, 50)
 
-		local last = runner.last_output_lines[#runner.last_output_lines]
-		assert.are.equal("[Process exited 42]", last)
+		assert.are.equal("failing", runner.last_output_lines[#runner.last_output_lines])
+		for _, line in ipairs(runner.last_output_lines) do
+			assert.is_falsy(line:find("%[Process exited %d+%]"))
+		end
+		assert.are.equal("flow://sh (42)", vim.api.nvim_buf_get_name(runner.last_terminal_buf))
 
 		-- Buffer should still be valid and visible
 		assert.is_true(vim.api.nvim_buf_is_valid(runner.last_terminal_buf))

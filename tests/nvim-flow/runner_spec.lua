@@ -94,4 +94,185 @@ describe("nvim-flow runner", function()
 		local shown = runner.display_command('#!/usr/bin/env bash\nbash "/tmp/run.sh"')
 		assert.are.equal('bash "/tmp/run.sh"', shown)
 	end)
+
+	-- buffer output_mode tests
+
+	it("buffer mode opens a split without replacing the source buffer", function()
+		vim.cmd("edit " .. vim.fn.fnameescape(target))
+		local source_buf = vim.api.nvim_get_current_buf()
+
+		local ok, err = runner.run({
+			cmd = "#!/usr/bin/env bash\necho buffer-test",
+			filepath = target,
+			runner = "terminal",
+		}, {
+			output_mode = "buffer",
+			terminal_height = 5,
+			show_command = false,
+		})
+
+		assert.is_true(ok, err)
+		assert.are.equal(source_buf, vim.api.nvim_get_current_buf())
+		assert.are.equal(1, vim.b[runner.last_terminal_buf].nvim_flow_terminal)
+	end)
+
+	it("buffer mode respects terminal_position top and bottom", function()
+		vim.cmd("edit " .. vim.fn.fnameescape(target))
+		local source_win = vim.api.nvim_get_current_win()
+
+		local ok_top = runner.run({
+			cmd = "#!/usr/bin/env bash\necho top",
+			filepath = target,
+			runner = "terminal",
+		}, {
+			output_mode = "buffer",
+			terminal_height = 5,
+			show_command = false,
+		})
+		assert.is_true(ok_top)
+
+		local top_row = vim.fn.win_screenpos(runner.last_terminal_win)[1]
+		local source_row = vim.fn.win_screenpos(source_win)[1]
+		assert.is_true(top_row < source_row)
+
+		vim.cmd("only")
+		vim.cmd("edit " .. vim.fn.fnameescape(target))
+		source_win = vim.api.nvim_get_current_win()
+
+		local ok_bottom = runner.run({
+			cmd = "#!/usr/bin/env bash\necho bottom",
+			filepath = target,
+			runner = "terminal",
+		}, {
+			output_mode = "buffer",
+			terminal_height = 5,
+			terminal_position = "bottom",
+			show_command = false,
+		})
+		assert.is_true(ok_bottom)
+
+		local bottom_row = vim.fn.win_screenpos(runner.last_terminal_win)[1]
+		source_row = vim.fn.win_screenpos(source_win)[1]
+		assert.is_true(bottom_row > source_row)
+	end)
+
+	it("buffer mode sets wrapped scratch-buffer options", function()
+		vim.cmd("edit " .. vim.fn.fnameescape(target))
+
+		local ok = runner.run({
+			cmd = "#!/usr/bin/env bash\necho opts-test",
+			filepath = target,
+			runner = "terminal",
+		}, {
+			output_mode = "buffer",
+			terminal_height = 5,
+			show_command = false,
+		})
+		assert.is_true(ok)
+
+		local buf = runner.last_terminal_buf
+		local win = runner.last_terminal_win
+		assert.are.equal("nofile", vim.bo[buf].buftype)
+		assert.are.equal(false, vim.bo[buf].swapfile)
+		assert.are.equal(true, vim.wo[win].wrap)
+		assert.are.equal(true, vim.wo[win].linebreak)
+		assert.are.equal(false, vim.wo[win].number)
+		assert.are.equal(false, vim.wo[win].relativenumber)
+		assert.are.equal("no", vim.wo[win].signcolumn)
+	end)
+
+	it("buffer mode stores output in runner.last_output_lines", function()
+		vim.cmd("edit " .. vim.fn.fnameescape(target))
+
+		local ok = runner.run({
+			cmd = "#!/usr/bin/env bash\necho hello-flow",
+			filepath = target,
+			runner = "terminal",
+		}, {
+			output_mode = "buffer",
+			terminal_height = 5,
+			show_command = false,
+		})
+		assert.is_true(ok)
+
+		-- Wait for the async job to finish
+		vim.wait(5000, function()
+			return #runner.last_output_lines > 0
+		end, 50)
+
+		local found = false
+		for _, line in ipairs(runner.last_output_lines) do
+			if line:find("hello-flow", 1, true) then
+				found = true
+				break
+			end
+		end
+		assert.is_true(found, "expected 'hello-flow' in output lines")
+
+		-- Should end with process exit line
+		local last = runner.last_output_lines[#runner.last_output_lines]
+		assert.is_truthy(last:find("%[Process exited %d+%]"))
+	end)
+
+	it("show_command in buffer mode strips shebang and adds Lua-generated separator", function()
+		local header = runner._build_buffer_header_for_test("#!/usr/bin/env bash\npython /tmp/test.py --verbose")
+		assert.are.equal("python /tmp/test.py --verbose", header[1])
+		-- separator should be dashes matching command width
+		local expected_width = vim.fn.strdisplaywidth("python /tmp/test.py --verbose")
+		assert.are.equal(string.rep("-", expected_width), header[2])
+		-- should NOT contain shebang
+		for _, line in ipairs(header) do
+			assert.is_falsy(line:find("^#!"))
+		end
+	end)
+
+	it("buffer mode nonzero exit still leaves output visible with exit status", function()
+		vim.cmd("edit " .. vim.fn.fnameescape(target))
+
+		local ok = runner.run({
+			cmd = "#!/usr/bin/env bash\necho failing && exit 42",
+			filepath = target,
+			runner = "terminal",
+		}, {
+			output_mode = "buffer",
+			terminal_height = 5,
+			show_command = false,
+		})
+		assert.is_true(ok)
+
+		vim.wait(5000, function()
+			return #runner.last_output_lines > 0
+		end, 50)
+
+		local last = runner.last_output_lines[#runner.last_output_lines]
+		assert.are.equal("[Process exited 42]", last)
+
+		-- Buffer should still be valid and visible
+		assert.is_true(vim.api.nvim_buf_is_valid(runner.last_terminal_buf))
+		assert.is_true(vim.api.nvim_win_is_valid(runner.last_terminal_win))
+	end)
+
+	it("buffer mode strips carriage returns from PTY output", function()
+		vim.cmd("edit " .. vim.fn.fnameescape(target))
+
+		local ok = runner.run({
+			cmd = "#!/usr/bin/env bash\nprintf 'alpha\\r\\nbeta\\r\\n'",
+			filepath = target,
+			runner = "terminal",
+		}, {
+			output_mode = "buffer",
+			terminal_height = 5,
+			show_command = false,
+		})
+		assert.is_true(ok)
+
+		vim.wait(5000, function()
+			return #runner.last_output_lines > 0
+		end, 50)
+
+		assert.are.equal("alpha", runner.last_output_lines[1])
+		assert.are.equal("beta", runner.last_output_lines[2])
+		assert.is_falsy(runner.last_output_lines[1]:find("\r", 1, true))
+		assert.is_falsy(runner.last_output_lines[2]:find("\r", 1, true))
+	end)
 end)

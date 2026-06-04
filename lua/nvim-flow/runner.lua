@@ -1,12 +1,15 @@
 local M = {}
 
 local uv = vim.uv or vim.loop
+local ansi = require("nvim-flow.ansi")
 
 M.last_output_lines = {}
 M.last_command = nil
 M.last_cmd_def = nil
 M.last_terminal_buf = nil
 M.last_terminal_win = nil
+
+local current_buffer_job = nil
 
 local function trim(value)
 	return (value:gsub("^%s+", ""):gsub("%s+$", ""))
@@ -30,6 +33,14 @@ local function max_line_width(lines)
 		max_width = math.max(max_width, vim.fn.strdisplaywidth(line))
 	end
 	return max_width
+end
+
+local function normalize_output_line(line)
+	line = (line or ""):gsub("\r+$", "")
+	if line:find("\r", 1, true) then
+		line = line:gsub(".*\r", "")
+	end
+	return line
 end
 
 function M.display_command(cmd)
@@ -120,8 +131,229 @@ function M.get_last_output()
 	return vim.deepcopy(M.last_output_lines)
 end
 
+local function build_buffer_header(cmd)
+	local display_cmd = M.display_command(cmd)
+	local display_lines = split_lines(display_cmd)
+	local sep_width = max_line_width(display_lines)
+	if sep_width < 1 then
+		sep_width = 1
+	end
+	local header = {}
+	for _, line in ipairs(display_lines) do
+		table.insert(header, line)
+	end
+	table.insert(header, string.rep("-", sep_width))
+	return header
+end
+
+local function run_buffer(cmd_def, opts)
+	local show_command = opts.show_command ~= false
+	local terminal_height = tonumber(opts.terminal_height) or 15
+	local terminal_position = opts.terminal_position == "bottom" and "bottom" or "top"
+	local source_win = vim.api.nvim_get_current_win()
+	local source_buf = vim.api.nvim_get_current_buf()
+
+	local script_path, script_err = build_script(cmd_def.cmd, false)
+	if not script_path then
+		return false, script_err
+	end
+
+	M.last_output_lines = {}
+	M.last_command = cmd_def.cmd
+	M.last_cmd_def = vim.deepcopy(cmd_def)
+
+	local buf = vim.api.nvim_create_buf(false, true)
+	vim.b[buf].nvim_flow_terminal = 1
+	vim.bo[buf].buftype = "nofile"
+	vim.bo[buf].bufhidden = "wipe"
+	vim.bo[buf].swapfile = false
+	local buf_name = "flow://" .. (cmd_def.source_key or "run")
+	pcall(vim.api.nvim_buf_set_name, buf, buf_name)
+
+	local buf_win
+	local opened, open_result = pcall(vim.api.nvim_open_win, buf, true, {
+		split = terminal_position == "top" and "above" or "below",
+		win = source_win,
+		height = terminal_height,
+	})
+	if opened then
+		buf_win = open_result
+	else
+		if terminal_position == "top" then
+			vim.cmd(("topleft %dsplit"):format(terminal_height))
+		else
+			vim.cmd(("botright %dsplit"):format(terminal_height))
+		end
+		buf_win = vim.api.nvim_get_current_win()
+		vim.api.nvim_win_set_buf(buf_win, buf)
+	end
+
+	vim.wo[buf_win].wrap = true
+	vim.wo[buf_win].linebreak = true
+	vim.wo[buf_win].number = false
+	vim.wo[buf_win].relativenumber = false
+	vim.wo[buf_win].signcolumn = "no"
+
+	M.last_terminal_buf = buf
+	M.last_terminal_win = buf_win
+
+	local header_lines = {}
+	if show_command then
+		header_lines = build_buffer_header(cmd_def.cmd)
+	end
+
+	vim.bo[buf].modifiable = true
+	if #header_lines > 0 then
+		vim.api.nvim_buf_set_lines(buf, 0, -1, false, header_lines)
+	end
+
+	local function restore_source_window()
+		local target_win = source_win
+		if not vim.api.nvim_win_is_valid(target_win) then
+			target_win = nil
+		end
+
+		if target_win and vim.api.nvim_win_get_buf(target_win) ~= source_buf then
+			for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+				if vim.api.nvim_win_get_buf(win) == source_buf then
+					target_win = win
+					break
+				end
+			end
+		end
+
+		if not target_win then
+			target_win = vim.api.nvim_tabpage_list_wins(0)[1]
+			if target_win and vim.api.nvim_buf_is_valid(source_buf) then
+				vim.api.nvim_win_set_buf(target_win, source_buf)
+			end
+		end
+
+		if target_win and vim.api.nvim_win_is_valid(target_win) then
+			if vim.api.nvim_buf_is_valid(source_buf) and vim.api.nvim_win_get_buf(target_win) ~= source_buf then
+				vim.api.nvim_win_set_buf(target_win, source_buf)
+			end
+			vim.api.nvim_set_current_win(target_win)
+		end
+	end
+
+	local function cleanup_script()
+		if uv and uv.fs_unlink then
+			uv.fs_unlink(script_path)
+		else
+			os.remove(script_path)
+		end
+	end
+
+	local collected = { "" }
+
+	local function on_output(_, data, _)
+		if not data or #data == 0 then
+			return
+		end
+		collected[#collected] = collected[#collected] .. (data[1] or "")
+		for i = 2, #data do
+			table.insert(collected, data[i])
+		end
+	end
+
+	local function on_exit(job_id, exit_code)
+		-- Ignore stale callbacks from superseded runs
+		if job_id ~= current_buffer_job then
+			cleanup_script()
+			return
+		end
+		current_buffer_job = nil
+
+		-- With stdout_buffered/stderr_buffered, on_stdout and on_stderr
+		-- are guaranteed to have fired before on_exit. Collected data is
+		-- ready; process it directly (jobstart callbacks run on main loop).
+		local lines = vim.deepcopy(collected)
+
+		-- Remove trailing empty line (artifact of final newline)
+		if #lines > 0 and lines[#lines] == "" then
+			table.remove(lines)
+		end
+
+		for i, line in ipairs(lines) do
+			lines[i] = normalize_output_line(line)
+		end
+
+		-- Filter benign errors from non-PTY fallback paths
+		local filtered = {}
+		for _, line in ipairs(lines) do
+			if not line:match("^stty:.*Inappropriate ioctl") then
+				table.insert(filtered, line)
+			end
+		end
+		lines = filtered
+
+		table.insert(lines, ("[Process exited %d]"):format(exit_code))
+
+		local all_lines = {}
+		for _, hl in ipairs(header_lines) do
+			table.insert(all_lines, hl)
+		end
+		for _, ol in ipairs(lines) do
+			table.insert(all_lines, ol)
+		end
+
+		-- Store raw lines (with ANSI) for last_output_lines so quickfix
+		-- parsing sees plain text after stripping
+		M.last_output_lines = ansi.strip_lines(vim.deepcopy(all_lines))
+
+		if vim.api.nvim_buf_is_valid(buf) then
+			local display_lines = ansi.strip_lines(vim.deepcopy(all_lines))
+			vim.bo[buf].modifiable = true
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, display_lines)
+			vim.bo[buf].modifiable = false
+			-- Apply ANSI color highlights to output lines (skip header)
+			ansi.highlight_buffer(buf, lines, #header_lines)
+			-- Scroll to bottom
+			if vim.api.nvim_win_is_valid(buf_win) then
+				local line_count = vim.api.nvim_buf_line_count(buf)
+				vim.api.nvim_win_set_cursor(buf_win, { line_count, 0 })
+			end
+		end
+
+		cleanup_script()
+	end
+
+	-- Run under a PTY so terminal-aware programs (including code that
+	-- calls `stty size`) see a real terminal size, while we still render
+	-- the captured output into a normal buffer.
+	local env = vim.fn.environ()
+	env.COLUMNS = tostring(vim.api.nvim_win_get_width(buf_win))
+	env.LINES = tostring(vim.api.nvim_win_get_height(buf_win))
+
+	local job = vim.fn.jobstart(script_path, {
+		env = env,
+		pty = true,
+		width = vim.api.nvim_win_get_width(buf_win),
+		height = vim.api.nvim_win_get_height(buf_win),
+		stdout_buffered = true,
+		on_stdout = on_output,
+		on_exit = on_exit,
+	})
+
+	if job <= 0 then
+		cleanup_script()
+		restore_source_window()
+		return false, "failed to start job"
+	end
+
+	current_buffer_job = job
+	restore_source_window()
+	return true
+end
+
 function M.run(cmd_def, opts)
 	opts = opts or {}
+
+	if opts.output_mode == "buffer" then
+		return run_buffer(cmd_def, opts)
+	end
+
 	local show_command = opts.show_command ~= false
 	local terminal_height = tonumber(opts.terminal_height) or 15
 	local terminal_position = opts.terminal_position == "bottom" and "bottom" or "top"
@@ -190,8 +422,8 @@ function M.run(cmd_def, opts)
 	end
 
 	local function capture_terminal_output()
-		if M.last_terminal_buf and vim.api.nvim_buf_is_valid(M.last_terminal_buf) then
-			M.last_output_lines = vim.api.nvim_buf_get_lines(M.last_terminal_buf, 0, -1, false)
+		if term_buf and vim.api.nvim_buf_is_valid(term_buf) then
+			M.last_output_lines = vim.api.nvim_buf_get_lines(term_buf, 0, -1, false)
 		end
 	end
 
@@ -207,7 +439,10 @@ function M.run(cmd_def, opts)
 	local job = vim.fn.termopen(script_path, {
 		on_exit = function()
 			vim.schedule(function()
-				capture_terminal_output()
+				-- Only capture if this terminal is still the active one
+				if M.last_terminal_buf == term_buf then
+					capture_terminal_output()
+				end
 				cleanup_script()
 			end)
 		end,
@@ -223,6 +458,10 @@ function M.run(cmd_def, opts)
 	restore_source_window()
 
 	return true
+end
+
+function M._build_buffer_header_for_test(cmd)
+	return build_buffer_header(cmd)
 end
 
 return M

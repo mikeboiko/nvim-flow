@@ -74,6 +74,7 @@ return {
       config_file = ".flow.yml",
       terminal_height = 15,
       terminal_position = "top",
+      output_mode = "buffer",
       edit_open_command = "tabedit",
       stop_at_home = true,
       show_command = true,
@@ -100,6 +101,7 @@ require("nvim-flow").setup({
   config_file = ".flow.yml",
   terminal_height = 15,
   terminal_position = "top", -- "top" | "bottom"
+  output_mode = "buffer", -- "terminal" | "buffer"
   edit_open_command = "tabedit", -- e.g. "tabedit" | "edit" | "split" | "vsplit"
   stop_at_home = true,
   show_command = true,
@@ -122,6 +124,9 @@ require("nvim-flow").setup({
   - Height of the terminal split used by `FlowRun`.
 - `terminal_position` (`"top" | "bottom"`, default: `"top"`)
   - Where the terminal split opens.
+- `output_mode` (`"terminal" | "buffer"`, default: `"buffer"`)
+  - `"buffer"` — run commands as a background job and display output in a normal scratch buffer (`flow://<source_key>`) with soft-wrap enabled. Avoids hard-wrap caused by narrow terminal PTY width.
+  - `"terminal"` — run commands in a PTY-backed terminal buffer.
 - `edit_open_command` (`string`, default: `"tabedit"`)
   - Vim command used by `FlowEdit` to open the matched `.flow.yml` location (for example: `tabedit`, `edit`, `split`, `vsplit`).
 - `stop_at_home` (`boolean`, default: `true`)
@@ -264,7 +269,8 @@ All found configs are merged. Closer files override farther files.
 
 - Default runner: terminal split (`runner: vim` or omitted)
 - Terminal split opens at the top by default; set `terminal_position = "bottom"` to open below.
-- With `show_command = true`, the separator line is sized to the command width (capped by terminal width).
+- With `show_command = true`, the separator line is sized to the command width (capped by terminal width in terminal mode; display width in buffer mode).
+- `output_mode = "buffer"` uses a normal scratch buffer for display, preventing hard-wrap on long lines. The buffer has soft-wrap and linebreak enabled. Commands run in a PTY-backed job with the split width/height so terminal-aware programs and `stty size` still see terminal dimensions, while output is captured into the buffer with a `[Process exited N]` status line appended.
 - Debug runner: `runner: debug` or `:FlowDebug` (requires `nvim-dap`)
 
 ## Quickfix behavior

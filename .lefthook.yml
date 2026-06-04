@@ -1,5 +1,5 @@
 pre-commit:
-  parallel: True
+  parallel: false
   skip:
     - rebase
   commands:
@@ -14,3 +14,6 @@ pre-commit:
         echo "Formatting files with prettier..."
         npx prettier --write {staged_files}
       stage_fixed: true
+
+    record-demo-gif:
+      run: ./vhs/record-demo-gif.sh

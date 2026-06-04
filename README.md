@@ -15,7 +15,7 @@ demo.py:
 
 Open the file in Neovim and run `:FlowRun` or `:FlowDebug` — nvim-flow resolves the command for the current file and executes it in a terminal split:
 
-![](https://vhs.charm.sh/vhs-5wLUhySW1bp6mOc67KGcET.gif)
+![](https://vhs.charm.sh/vhs-2L3cS7tQKxNqO0etWc493j.gif)
 
 ## Motivation
 
@@ -305,11 +305,12 @@ The demo shows:
 Run it with:
 
 ```bash
-vhs vhs/nvim-flow-demo.tape
-vhs publish nvim-flow-demo.gif
+./vhs/record-demo-gif.sh
 ```
 
-The tape outputs `vhs/nvim-flow-demo.gif`, which autoplays when embedded in README markdown.
+The script records `vhs/nvim-flow-demo.gif`, publishes it to `vhs.charm.sh`, rewrites the README demo embed URL, and stages the README update.
+
+`lefthook` also runs that script before commit when staged changes touch the demo surface (`.lefthook.yml`, `README.md`, `lua/`, `plugin/`, or `vhs/` files other than the generated GIF itself).
 
 ## Credit
 

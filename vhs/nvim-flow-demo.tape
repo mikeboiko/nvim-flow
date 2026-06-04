@@ -1,9 +1,9 @@
 Output nvim-flow-demo.gif
 Set Shell "bash"
 Set FontFamily "Hack Nerd Font Mono"
-Set FontSize 18
-Set Width 1000
-Set Height 700
+Set FontSize 19
+Set Width 1280
+Set Height 900
 Set Padding 20
 Set TypingSpeed 60ms
 

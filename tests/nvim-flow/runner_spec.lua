@@ -212,6 +212,31 @@ describe("nvim-flow runner", function()
 		assert.are.equal("flow://run", vim.api.nvim_buf_get_name(runner.last_terminal_buf))
 	end)
 
+	it("buffer mode streams output before the job exits", function()
+		vim.cmd("edit " .. vim.fn.fnameescape(target))
+
+		local ok = runner.run({
+			cmd = "#!/usr/bin/env bash\nprintf 'first\\n'; sleep 1; printf 'second\\n'",
+			filepath = target,
+			runner = "terminal",
+		}, {
+			output_mode = "buffer",
+			terminal_height = 5,
+			show_command = false,
+		})
+		assert.is_true(ok)
+
+		local saw_first = vim.wait(1500, function()
+			return #runner.last_output_lines == 1 and runner.last_output_lines[1] == "first"
+		end, 20)
+		assert.is_true(saw_first, "expected first line before process exit")
+
+		local saw_second = vim.wait(5000, function()
+			return #runner.last_output_lines >= 2 and runner.last_output_lines[2] == "second"
+		end, 20)
+		assert.is_true(saw_second, "expected second line after streaming completes")
+	end)
+
 	it("show_command in buffer mode strips shebang and adds Lua-generated separator", function()
 		local header = runner._build_buffer_header_for_test("#!/usr/bin/env bash\npython /tmp/test.py --verbose")
 		assert.are.equal("python /tmp/test.py --verbose", header[1])
@@ -240,7 +265,7 @@ describe("nvim-flow runner", function()
 		assert.is_true(ok)
 
 		vim.wait(5000, function()
-			return #runner.last_output_lines > 0
+			return vim.api.nvim_buf_get_name(runner.last_terminal_buf) == "flow://sh (42)"
 		end, 50)
 
 		assert.are.equal("failing", runner.last_output_lines[#runner.last_output_lines])

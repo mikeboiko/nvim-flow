@@ -214,6 +214,7 @@ local function run_buffer(cmd_def, opts)
 	if #header_lines > 0 then
 		vim.api.nvim_buf_set_lines(buf, 0, -1, false, header_lines)
 	end
+	vim.bo[buf].modifiable = false
 
 	local function restore_source_window()
 		local target_win = source_win
@@ -255,7 +256,72 @@ local function run_buffer(cmd_def, opts)
 
 	local collected = { "" }
 
-	local function on_output(_, data, _)
+	local function output_lines_snapshot()
+		local lines = vim.deepcopy(collected)
+
+		if #lines > 0 and lines[#lines] == "" then
+			table.remove(lines)
+		end
+
+		for i, line in ipairs(lines) do
+			lines[i] = normalize_output_line(line)
+		end
+
+		local filtered = {}
+		for _, line in ipairs(lines) do
+			if not line:match("^stty:.*Inappropriate ioctl") then
+				table.insert(filtered, line)
+			end
+		end
+
+		return filtered
+	end
+
+	local function render_output(exit_code)
+		local lines = output_lines_snapshot()
+		local all_lines = {}
+		for _, hl in ipairs(header_lines) do
+			table.insert(all_lines, hl)
+		end
+		for _, ol in ipairs(lines) do
+			table.insert(all_lines, ol)
+		end
+
+		M.last_output_lines = ansi.strip_lines(vim.deepcopy(all_lines))
+
+		if not vim.api.nvim_buf_is_valid(buf) then
+			return
+		end
+
+		local should_follow = false
+		if vim.api.nvim_win_is_valid(buf_win) and vim.api.nvim_win_get_buf(buf_win) == buf then
+			local cursor_line = vim.api.nvim_win_get_cursor(buf_win)[1]
+			local buffer_line_count = vim.api.nvim_buf_line_count(buf)
+			should_follow = cursor_line >= buffer_line_count
+		end
+
+		if exit_code ~= nil then
+			pcall(vim.api.nvim_buf_set_name, buf, build_buffer_name(cmd_def, exit_code))
+		end
+
+		local display_lines = ansi.strip_lines(vim.deepcopy(lines))
+		vim.bo[buf].modifiable = true
+		vim.api.nvim_buf_set_lines(buf, #header_lines, -1, false, display_lines)
+		ansi.clear_buffer(buf, #header_lines, -1)
+		ansi.highlight_buffer(buf, lines, #header_lines)
+		vim.bo[buf].modifiable = false
+
+		if should_follow and vim.api.nvim_win_is_valid(buf_win) and vim.api.nvim_win_get_buf(buf_win) == buf then
+			local line_count = math.max(vim.api.nvim_buf_line_count(buf), 1)
+			vim.api.nvim_win_set_cursor(buf_win, { line_count, 0 })
+		end
+	end
+
+	local function on_output(job_id, data, _)
+		if current_buffer_job and job_id ~= current_buffer_job then
+			return
+		end
+
 		if not data or #data == 0 then
 			return
 		end
@@ -263,6 +329,8 @@ local function run_buffer(cmd_def, opts)
 		for i = 2, #data do
 			table.insert(collected, data[i])
 		end
+
+		render_output()
 	end
 
 	local function on_exit(job_id, exit_code)
@@ -273,55 +341,7 @@ local function run_buffer(cmd_def, opts)
 		end
 		current_buffer_job = nil
 
-		-- With stdout_buffered/stderr_buffered, on_stdout and on_stderr
-		-- are guaranteed to have fired before on_exit. Collected data is
-		-- ready; process it directly (jobstart callbacks run on main loop).
-		local lines = vim.deepcopy(collected)
-
-		-- Remove trailing empty line (artifact of final newline)
-		if #lines > 0 and lines[#lines] == "" then
-			table.remove(lines)
-		end
-
-		for i, line in ipairs(lines) do
-			lines[i] = normalize_output_line(line)
-		end
-
-		-- Filter benign errors from non-PTY fallback paths
-		local filtered = {}
-		for _, line in ipairs(lines) do
-			if not line:match("^stty:.*Inappropriate ioctl") then
-				table.insert(filtered, line)
-			end
-		end
-		lines = filtered
-
-		local all_lines = {}
-		for _, hl in ipairs(header_lines) do
-			table.insert(all_lines, hl)
-		end
-		for _, ol in ipairs(lines) do
-			table.insert(all_lines, ol)
-		end
-
-		-- Store raw lines (with ANSI) for last_output_lines so quickfix
-		-- parsing sees plain text after stripping
-		M.last_output_lines = ansi.strip_lines(vim.deepcopy(all_lines))
-
-		if vim.api.nvim_buf_is_valid(buf) then
-			pcall(vim.api.nvim_buf_set_name, buf, build_buffer_name(cmd_def, exit_code))
-			local display_lines = ansi.strip_lines(vim.deepcopy(all_lines))
-			vim.bo[buf].modifiable = true
-			vim.api.nvim_buf_set_lines(buf, 0, -1, false, display_lines)
-			vim.bo[buf].modifiable = false
-			-- Apply ANSI color highlights to output lines (skip header)
-			ansi.highlight_buffer(buf, lines, #header_lines)
-			-- Scroll to bottom
-			if vim.api.nvim_win_is_valid(buf_win) then
-				local line_count = vim.api.nvim_buf_line_count(buf)
-				vim.api.nvim_win_set_cursor(buf_win, { line_count, 0 })
-			end
-		end
+		render_output(exit_code)
 
 		cleanup_script()
 	end
@@ -338,7 +358,6 @@ local function run_buffer(cmd_def, opts)
 		pty = true,
 		width = vim.api.nvim_win_get_width(buf_win),
 		height = vim.api.nvim_win_get_height(buf_win),
-		stdout_buffered = true,
 		on_stdout = on_output,
 		on_exit = on_exit,
 	})

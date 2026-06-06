@@ -67,6 +67,7 @@ local bg_to_palette = {
 	[107] = 15,
 }
 
+local ns = vim.api.nvim_create_namespace("nvim_flow_ansi")
 local hl_cache = {}
 
 local function get_hl_group(attrs)
@@ -134,8 +135,6 @@ end
 ---@param raw_lines string[] Lines with ANSI codes
 ---@param line_offset number 0-based line offset in buffer
 function M.highlight_buffer(buf, raw_lines, line_offset)
-	local ns = vim.api.nvim_create_namespace("nvim_flow_ansi")
-
 	local attrs = { bold = false, underline = false, fg_idx = nil, bg_idx = nil }
 
 	for i, raw in ipairs(raw_lines) do
@@ -190,6 +189,10 @@ function M.highlight_buffer(buf, raw_lines, line_offset)
 			end
 		end
 	end
+end
+
+function M.clear_buffer(buf, line_start, line_end)
+	vim.api.nvim_buf_clear_namespace(buf, ns, line_start or 0, line_end or -1)
 end
 
 return M

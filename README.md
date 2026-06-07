@@ -13,7 +13,7 @@ demo.py:
   cmd: python "{{filepath}}" --name mike
 ```
 
-Open the file in Neovim and run `:FlowRun` or `:FlowDebug` — nvim-flow resolves the command for the current file and executes it in a terminal split:
+Open the file in Neovim and run `:FlowRun` or `:FlowDebug` — nvim-flow resolves the command for the current file and executes it in a split. In the default buffer mode, output is rendered in a normal Neovim buffer so narrow splits do not hard-wrap PTY output:
 
 ![](https://vhs.charm.sh/vhs-1sshnzXuKsD3HBsuePeXJO.gif)
 
@@ -31,6 +31,7 @@ I wanted a workflow that matches how I actually work in Neovim: simple YAML conf
 | `nvim-dap` integration | ✅ built-in `:FlowDebug`              | ✅ via `preLaunchTask`                                     | ❌                                                              | ❌                                                   |
 | Quickfix integration   | ✅ Python traceback                   | ✅ generic output parsing                                  | ❌                                                              | ✅ diagnostics                                       |
 | Command preview        | ✅ floating window                    | ❌                                                         | ❌                                                              | ❌                                                   |
+| Wrapped output buffer  | ✅ built-in buffer mode               | ❌ no documented plain-buffer output                       | ❌ terminal-style modes only                                    | ⚠️ configurable buffer-mode display strategy         |
 | Jump to config source  | ✅ `:FlowEdit`                        | ❌                                                         | ❌                                                              | ❌                                                   |
 | Match resolution       | basename / glob / ext / folder / repo | manual task selection                                      | filetype-based                                                  | filetype + dir depth                                 |
 | Multi-step workflows   | ❌                                    | ✅                                                         | ❌                                                              | ❌                                                   |
@@ -270,8 +271,11 @@ All found configs are merged. Closer files override farther files.
 - Default runner: terminal split (`runner: vim` or omitted)
 - Terminal split opens at the top by default; set `terminal_position = "bottom"` to open below.
 - With `show_command = true`, the separator line is sized to the command width (capped by terminal width in terminal mode; display width in buffer mode).
+- `output_mode = "terminal"` uses Neovim's terminal/PTY path. Long lines follow the PTY width, so narrow splits hard-wrap output just like any other terminal pane.
 - `output_mode = "buffer"` uses a normal scratch buffer for display, preventing hard-wrap on long lines. The buffer has soft-wrap and linebreak enabled. Commands run in a PTY-backed job with the split width/height so terminal-aware programs and `stty size` still see terminal dimensions, and output streams into the buffer as it arrives. Auto-follow stays enabled only while the cursor remains at the bottom. Press `<C-c>` while focused on the flow buffer to interrupt the running job. Nonzero exits rename the buffer to `flow://<source_key> (N)`. Carriage-return/progress-line emulation is not part of this mode.
 - Debug runner: `runner: debug` or `:FlowDebug` (requires `nvim-dap`)
+
+If your commands print wide tables, long paths, or text-heavy logs, buffer mode is usually the better fit. It keeps the same split UX while rendering output like a normal wrapped buffer instead of a fixed-width terminal.
 
 ## Quickfix behavior
 

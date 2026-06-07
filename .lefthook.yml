@@ -2,6 +2,7 @@ pre-commit:
   parallel: false
   skip:
     - rebase
+
   commands:
     stylua-format:
       glob: '**/*.lua'
@@ -16,4 +17,5 @@ pre-commit:
       stage_fixed: true
 
     record-demo-gif:
+      glob: '**/*.lua'
       run: ./vhs/record-demo-gif.sh

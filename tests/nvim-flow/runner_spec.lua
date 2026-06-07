@@ -237,6 +237,50 @@ describe("nvim-flow runner", function()
 		assert.is_true(saw_second, "expected second line after streaming completes")
 	end)
 
+	it("buffer mode ctrl+c interrupts the running job", function()
+		vim.cmd("edit " .. vim.fn.fnameescape(target))
+
+		local ok = runner.run({
+			cmd = "#!/usr/bin/env bash\nprintf 'first\\n'; sleep 5; printf 'second\\n'",
+			filepath = target,
+			runner = "terminal",
+		}, {
+			output_mode = "buffer",
+			terminal_height = 5,
+			show_command = false,
+		})
+		assert.is_true(ok)
+
+		local saw_first = vim.wait(1500, function()
+			return #runner.last_output_lines == 1 and runner.last_output_lines[1] == "first"
+		end, 20)
+		assert.is_true(saw_first, "expected first line before interrupt")
+
+		local keymaps = vim.api.nvim_buf_get_keymap(runner.last_terminal_buf, "n")
+		local has_interrupt_map = false
+		for _, keymap in ipairs(keymaps) do
+			if keymap.lhs == "<C-C>" or keymap.lhs == "<C-c>" then
+				has_interrupt_map = true
+				break
+			end
+		end
+		assert.is_true(has_interrupt_map, "expected buffer-local <C-c> mapping")
+		assert.is_true(runner.interrupt_buffer_job(runner.last_terminal_buf))
+
+		local interrupted = vim.wait(5000, function()
+			local name = vim.api.nvim_buf_get_name(runner.last_terminal_buf)
+			return name:match("^flow://run %(%d+%)$") ~= nil
+		end, 20)
+		assert.is_true(interrupted, "expected interrupt to stop the running job")
+
+		local lines = runner.get_last_output()
+		assert.are.equal("first", lines[1])
+		for _, line in ipairs(lines) do
+			assert.is_not.equal("second", line)
+		end
+		assert.is_false(runner.interrupt_buffer_job(runner.last_terminal_buf))
+	end)
+
 	it("show_command in buffer mode strips shebang and adds Lua-generated separator", function()
 		local header = runner._build_buffer_header_for_test("#!/usr/bin/env bash\npython /tmp/test.py --verbose")
 		assert.are.equal("python /tmp/test.py --verbose", header[1])

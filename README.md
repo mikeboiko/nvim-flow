@@ -15,7 +15,7 @@ demo.py:
 
 Open the file in Neovim and run `:FlowRun` or `:FlowDebug` — nvim-flow resolves the command for the current file and executes it in a terminal split:
 
-![](https://vhs.charm.sh/vhs-9TDj87lPHXoISBPhmYfu9.gif)
+![](https://vhs.charm.sh/vhs-1sshnzXuKsD3HBsuePeXJO.gif)
 
 ## Motivation
 
@@ -125,7 +125,7 @@ require("nvim-flow").setup({
 - `terminal_position` (`"top" | "bottom"`, default: `"top"`)
   - Where the terminal split opens.
 - `output_mode` (`"terminal" | "buffer"`, default: `"buffer"`)
-  - `"buffer"` — stream command output into a normal scratch buffer (`flow://<source_key>`) with soft-wrap enabled. Nonzero exits rename the buffer to `flow://<source_key> (N)`. Avoids hard-wrap caused by narrow terminal PTY width.
+  - `"buffer"` — stream command output into a normal scratch buffer (`flow://<source_key>`) with soft-wrap enabled. Nonzero exits rename the buffer to `flow://<source_key> (N)`. Press `<C-c>` while focused on the flow buffer to interrupt the running job. Avoids hard-wrap caused by narrow terminal PTY width.
   - `"terminal"` — run commands in a PTY-backed terminal buffer.
 - `edit_open_command` (`string`, default: `"tabedit"`)
   - Vim command used by `FlowEdit` to open the matched `.flow.yml` location (for example: `tabedit`, `edit`, `split`, `vsplit`).
@@ -270,7 +270,7 @@ All found configs are merged. Closer files override farther files.
 - Default runner: terminal split (`runner: vim` or omitted)
 - Terminal split opens at the top by default; set `terminal_position = "bottom"` to open below.
 - With `show_command = true`, the separator line is sized to the command width (capped by terminal width in terminal mode; display width in buffer mode).
-- `output_mode = "buffer"` uses a normal scratch buffer for display, preventing hard-wrap on long lines. The buffer has soft-wrap and linebreak enabled. Commands run in a PTY-backed job with the split width/height so terminal-aware programs and `stty size` still see terminal dimensions, and output streams into the buffer as it arrives. Auto-follow stays enabled only while the cursor remains at the bottom. Nonzero exits rename the buffer to `flow://<source_key> (N)`. Carriage-return/progress-line emulation is not part of this mode.
+- `output_mode = "buffer"` uses a normal scratch buffer for display, preventing hard-wrap on long lines. The buffer has soft-wrap and linebreak enabled. Commands run in a PTY-backed job with the split width/height so terminal-aware programs and `stty size` still see terminal dimensions, and output streams into the buffer as it arrives. Auto-follow stays enabled only while the cursor remains at the bottom. Press `<C-c>` while focused on the flow buffer to interrupt the running job. Nonzero exits rename the buffer to `flow://<source_key> (N)`. Carriage-return/progress-line emulation is not part of this mode.
 - Debug runner: `runner: debug` or `:FlowDebug` (requires `nvim-dap`)
 
 ## Quickfix behavior

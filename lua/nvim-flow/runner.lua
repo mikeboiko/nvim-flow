@@ -154,6 +154,31 @@ local function build_buffer_name(cmd_def, exit_code)
 	return "flow://" .. source_key
 end
 
+local function job_is_running(job_id)
+	if type(job_id) ~= "number" or job_id <= 0 then
+		return false
+	end
+	local status = vim.fn.jobwait({ job_id }, 0)[1]
+	return status == -1
+end
+
+function M.interrupt_buffer_job(bufnr)
+	bufnr = bufnr or vim.api.nvim_get_current_buf()
+	if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
+		return false
+	end
+
+	local ok, job_id = pcall(function()
+		return vim.b[bufnr].nvim_flow_job_id
+	end)
+	if not ok or not job_is_running(job_id) then
+		return false
+	end
+
+	vim.fn.chansend(job_id, string.char(3))
+	return true
+end
+
 local function run_buffer(cmd_def, opts)
 	local show_command = opts.show_command ~= false
 	local terminal_height = tonumber(opts.terminal_height) or 15
@@ -334,6 +359,13 @@ local function run_buffer(cmd_def, opts)
 	end
 
 	local function on_exit(job_id, exit_code)
+		if vim.api.nvim_buf_is_valid(buf) then
+			if vim.b[buf].nvim_flow_job_id == job_id then
+				vim.b[buf].nvim_flow_job_id = nil
+			end
+			pcall(vim.keymap.del, "n", "<C-c>", { buffer = buf })
+		end
+
 		-- Ignore stale callbacks from superseded runs
 		if job_id ~= current_buffer_job then
 			cleanup_script()
@@ -369,6 +401,15 @@ local function run_buffer(cmd_def, opts)
 	end
 
 	current_buffer_job = job
+	vim.b[buf].nvim_flow_job_id = job
+	vim.keymap.set("n", "<C-c>", function()
+		M.interrupt_buffer_job(buf)
+	end, {
+		buffer = buf,
+		silent = true,
+		nowait = true,
+		desc = "Flow interrupt",
+	})
 	restore_source_window()
 	return true
 end

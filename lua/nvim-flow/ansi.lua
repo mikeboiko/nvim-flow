@@ -1,8 +1,5 @@
 local M = {}
 
--- ESC[ ... m pattern (SGR sequences)
-local ESC_PATTERN = "\27%[([%d;]*)m"
-
 -- Resolve ANSI color index to the user's actual terminal palette color.
 -- Falls back to basic named colors if terminal_color_N is not set.
 local fallback_fg = {
@@ -70,6 +67,25 @@ local bg_to_palette = {
 local ns = vim.api.nvim_create_namespace("nvim_flow_ansi")
 local hl_cache = {}
 
+local function strip_osc(text)
+	text = text or ""
+	text = text:gsub("\27%].-\7", "")
+	text = text:gsub("\27%].-\27\\", "")
+	return text
+end
+
+local function strip_non_sgr(text)
+	text = strip_osc(text)
+	return (
+		text:gsub("\27%[([%d;:?]*)([ -/]*)([@-~])", function(params, intermediates, final)
+			if intermediates == "" and final == "m" then
+				return ("\27[%sm"):format(params)
+			end
+			return ""
+		end)
+	)
+end
+
 local function get_hl_group(attrs)
 	local key = (attrs.bold and "B" or "")
 		.. (attrs.underline and "U" or "")
@@ -117,7 +133,7 @@ end
 
 --- Strip ANSI escape sequences from a string.
 function M.strip(text)
-	return (text:gsub("\27%[[%d;]*m", ""))
+	return (strip_non_sgr(text):gsub("\27%[[%d;:]*m", ""))
 end
 
 --- Strip ANSI sequences from a list of lines (in-place).
@@ -126,6 +142,11 @@ function M.strip_lines(lines)
 		lines[i] = M.strip(line)
 	end
 	return lines
+end
+
+--- Strip non-text terminal control sequences while preserving SGR color codes.
+function M.sanitize(text)
+	return strip_non_sgr(text)
 end
 
 --- Apply ANSI color highlights to a buffer.
@@ -138,11 +159,12 @@ function M.highlight_buffer(buf, raw_lines, line_offset)
 	local attrs = { bold = false, underline = false, fg_idx = nil, bg_idx = nil }
 
 	for i, raw in ipairs(raw_lines) do
+		raw = strip_non_sgr(raw)
 		local lnum = line_offset + i - 1
 		local col = 0
 		local last_pos = 1
 
-		for seq_start, params_str, seq_end in raw:gmatch("()\27%[([%d;]*)m()") do
+		for seq_start, params_str, seq_end in raw:gmatch("()\27%[([%d;:]*)m()") do
 			-- Text before this escape sequence
 			local text_before = raw:sub(last_pos, seq_start - 1)
 			local text_len = #text_before

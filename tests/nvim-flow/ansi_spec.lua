@@ -19,9 +19,20 @@ describe("nvim-flow ansi", function()
 		assert.are.equal("red", lines[3])
 	end)
 
+	it("sanitizes non-SGR terminal control sequences while preserving colors", function()
+		local input = "\27[2K\27[1A\27[31mhello\27[0m"
+		assert.are.equal("\27[31mhello\27[0m", ansi.sanitize(input))
+		assert.are.equal("hello", ansi.strip(input))
+	end)
+
+	it("strips OSC sequences from displayed text", function()
+		local input = "\27]8;;https://example.com\7link\27]8;;\7"
+		assert.are.equal("link", ansi.strip(input))
+	end)
+
 	it("highlight_buffer applies extmarks for colored output", function()
 		local buf = vim.api.nvim_create_buf(false, true)
-		local raw_lines = { "\27[31mERROR\27[0m: something failed" }
+		local raw_lines = { "\27[2K\27[1A\27[31mERROR\27[0m: something failed" }
 		local stripped = { "ERROR: something failed" }
 		vim.api.nvim_buf_set_lines(buf, 0, -1, false, stripped)
 

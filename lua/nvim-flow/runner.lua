@@ -289,7 +289,7 @@ local function run_buffer(cmd_def, opts)
 		end
 
 		for i, line in ipairs(lines) do
-			lines[i] = normalize_output_line(line)
+			lines[i] = ansi.sanitize(normalize_output_line(line))
 		end
 
 		local filtered = {}

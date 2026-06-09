@@ -346,4 +346,30 @@ describe("nvim-flow runner", function()
 		assert.is_falsy(runner.last_output_lines[1]:find("\r", 1, true))
 		assert.is_falsy(runner.last_output_lines[2]:find("\r", 1, true))
 	end)
+
+	it("buffer mode strips cursor-control sequences from progress-style output", function()
+		vim.cmd("edit " .. vim.fn.fnameescape(target))
+
+		local ok = runner.run({
+			cmd = "#!/usr/bin/env bash\nprintf '\\033[2Kbuilding\\n\\033[2K\\033[1A\\033[32mbuilt\\033[0m\\n'",
+			filepath = target,
+			runner = "terminal",
+		}, {
+			output_mode = "buffer",
+			terminal_height = 5,
+			show_command = false,
+		})
+		assert.is_true(ok)
+
+		vim.wait(5000, function()
+			return #runner.last_output_lines >= 2
+		end, 50)
+
+		assert.are.equal("building", runner.last_output_lines[1])
+		assert.are.equal("built", runner.last_output_lines[2])
+		for _, line in ipairs(runner.last_output_lines) do
+			assert.is_falsy(line:find("[2K", 1, true))
+			assert.is_falsy(line:find("[1A", 1, true))
+		end
+	end)
 end)

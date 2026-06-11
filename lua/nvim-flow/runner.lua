@@ -241,6 +241,12 @@ local function run_buffer(cmd_def, opts)
 	end
 	vim.bo[buf].modifiable = false
 
+	-- Start at the bottom so streamed output auto-follows until the user scrolls up.
+	if vim.api.nvim_win_is_valid(buf_win) and vim.api.nvim_win_get_buf(buf_win) == buf then
+		local initial_line = math.max(vim.api.nvim_buf_line_count(buf), 1)
+		pcall(vim.api.nvim_win_set_cursor, buf_win, { initial_line, 0 })
+	end
+
 	local function restore_source_window()
 		local target_win = source_win
 		if not vim.api.nvim_win_is_valid(target_win) then
@@ -280,6 +286,13 @@ local function run_buffer(cmd_def, opts)
 	end
 
 	local collected = { "" }
+	-- Rendering the whole buffer is O(lines), so doing it on every stdout chunk
+	-- starves input handling during fast output (e.g. a key like `k` to stop the
+	-- auto-follow is delayed by several lines). Coalesce chunks and render at most
+	-- once per interval so the event loop stays responsive.
+	local render_pending = false
+	local render_done = false
+	local RENDER_THROTTLE_MS = 40
 
 	local function output_lines_snapshot()
 		local lines = vim.deepcopy(collected)
@@ -342,6 +355,20 @@ local function run_buffer(cmd_def, opts)
 		end
 	end
 
+	local function schedule_render()
+		if render_pending or render_done then
+			return
+		end
+		render_pending = true
+		vim.defer_fn(function()
+			render_pending = false
+			if render_done then
+				return
+			end
+			render_output()
+		end, RENDER_THROTTLE_MS)
+	end
+
 	local function on_output(job_id, data, _)
 		if current_buffer_job and job_id ~= current_buffer_job then
 			return
@@ -355,7 +382,7 @@ local function run_buffer(cmd_def, opts)
 			table.insert(collected, data[i])
 		end
 
-		render_output()
+		schedule_render()
 	end
 
 	local function on_exit(job_id, exit_code)
@@ -373,6 +400,8 @@ local function run_buffer(cmd_def, opts)
 		end
 		current_buffer_job = nil
 
+		render_done = true
+		render_pending = false
 		render_output(exit_code)
 
 		cleanup_script()

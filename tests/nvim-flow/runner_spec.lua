@@ -347,6 +347,63 @@ describe("nvim-flow runner", function()
 		assert.is_falsy(runner.last_output_lines[2]:find("\r", 1, true))
 	end)
 
+	it("buffer mode auto-follows streamed output to the last line", function()
+		vim.cmd("edit " .. vim.fn.fnameescape(target))
+
+		local cmd = "#!/usr/bin/env bash\nfor i in $(seq 1 8); do echo line-$i; done"
+		local ok = runner.run({
+			cmd = cmd,
+			filepath = target,
+			runner = "terminal",
+		}, {
+			output_mode = "buffer",
+			terminal_height = 3,
+			show_command = true,
+		})
+		assert.is_true(ok)
+
+		vim.wait(5000, function()
+			local lines = runner.last_output_lines
+			return #lines > 0 and lines[#lines] == "line-8"
+		end, 20)
+
+		local win = runner.last_terminal_win
+		local buf = runner.last_terminal_buf
+		local cursor_line = vim.api.nvim_win_get_cursor(win)[1]
+		assert.are.equal(vim.api.nvim_buf_line_count(buf), cursor_line)
+		assert.is_true(cursor_line > #runner._build_buffer_header_for_test(cmd))
+	end)
+
+	it("buffer mode keeps cursor when scrolled away from the bottom", function()
+		vim.cmd("edit " .. vim.fn.fnameescape(target))
+
+		local ok = runner.run({
+			cmd = "#!/usr/bin/env bash\nprintf '1\\n2\\n3\\n'; sleep 1; printf '4\\n5\\n6\\n'",
+			filepath = target,
+			runner = "terminal",
+		}, {
+			output_mode = "buffer",
+			terminal_height = 3,
+			show_command = false,
+		})
+		assert.is_true(ok)
+
+		local saw_three = vim.wait(2000, function()
+			return #runner.last_output_lines >= 3
+		end, 20)
+		assert.is_true(saw_three, "expected first three lines")
+
+		local win = runner.last_terminal_win
+		vim.api.nvim_win_set_cursor(win, { 1, 0 })
+
+		local saw_six = vim.wait(5000, function()
+			return #runner.last_output_lines >= 6
+		end, 20)
+		assert.is_true(saw_six, "expected all six lines")
+
+		assert.are.equal(1, vim.api.nvim_win_get_cursor(win)[1])
+	end)
+
 	it("buffer mode strips cursor-control sequences from progress-style output", function()
 		vim.cmd("edit " .. vim.fn.fnameescape(target))
 

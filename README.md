@@ -15,7 +15,7 @@ demo.py:
 
 Open the file in Neovim and run `:FlowRun` or `:FlowDebug` — nvim-flow resolves the command for the current file and executes it in a split. In the default buffer mode, output is rendered in a normal Neovim buffer so narrow splits do not hard-wrap PTY output:
 
-![](https://vhs.charm.sh/vhs-1mg1rQjW818waD4TOA1Qa2.gif)
+![](https://vhs.charm.sh/vhs-7qyKf92kox9kfiI2KA9ZK4.gif)
 
 ## Motivation
 
@@ -126,7 +126,7 @@ require("nvim-flow").setup({
 - `terminal_position` (`"top" | "bottom"`, default: `"top"`)
   - Where the terminal split opens.
 - `output_mode` (`"terminal" | "buffer"`, default: `"buffer"`)
-  - `"buffer"` — stream command output into a normal scratch buffer (`flow://<source_key>`) with soft-wrap enabled. Nonzero exits rename the buffer to `flow://<source_key> (N)`. Press `<C-c>` while focused on the flow buffer to interrupt the running job. Avoids hard-wrap caused by narrow terminal PTY width.
+  - `"buffer"` — stream command output into a normal scratch buffer with soft-wrap enabled. The buffer name reflects job state: `flow://<source_key> [running]`, `flow://<source_key> [done]`, or `flow://<source_key> [failed:N]`. Press `<C-c>` while focused on the flow buffer to interrupt the running job. Avoids hard-wrap caused by narrow terminal PTY width.
   - `"terminal"` — run commands in a PTY-backed terminal buffer.
 - `edit_open_command` (`string`, default: `"tabedit"`)
   - Vim command used by `FlowEdit` to open the matched `.flow.yml` location (for example: `tabedit`, `edit`, `split`, `vsplit`).
@@ -146,7 +146,7 @@ require("nvim-flow").setup({
 
 ## Commands
 
-- `:FlowRun` - run resolved flow command in a terminal split
+- `:FlowRun` - run the resolved flow command in the configured split output mode
 - `:FlowDebug` - resolve the same flow command and launch a matching `nvim-dap` debug session
 - `:FlowEdit` - open the matched `.flow.yml` file and jump to the resolved command line
 - `:FlowToggleLock[ {filepath}]` - toggle lock (or set lock to explicit path)
@@ -272,7 +272,7 @@ All found configs are merged. Closer files override farther files.
 - Terminal split opens at the top by default; set `terminal_position = "bottom"` to open below.
 - With `show_command = true`, the separator line is sized to the command width (capped by terminal width in terminal mode; display width in buffer mode).
 - `output_mode = "terminal"` uses Neovim's terminal/PTY path. Long lines follow the PTY width, so narrow splits hard-wrap output just like any other terminal pane.
-- `output_mode = "buffer"` uses a normal scratch buffer for display, preventing hard-wrap on long lines. The buffer has soft-wrap and linebreak enabled. Commands run in a PTY-backed job with the split width/height so terminal-aware programs and `stty size` still see terminal dimensions, and output streams into the buffer as it arrives. New output is followed automatically like terminal mode; auto-follow pauses if you scroll up and resumes when the cursor returns to the last line. Press `<C-c>` while focused on the flow buffer to interrupt the running job. Nonzero exits rename the buffer to `flow://<source_key> (N)`. Terminal cursor-control sequences are stripped from the rendered text, so progress-style redraws degrade to plain text instead of leaking raw escape codes. Full carriage-return/progress-line emulation is not part of this mode.
+- `output_mode = "buffer"` uses a normal scratch buffer for display, preventing hard-wrap on long lines. The buffer has soft-wrap and linebreak enabled. Commands run in a PTY-backed job with the split width/height so terminal-aware programs and `stty size` still see terminal dimensions, and output streams into the buffer as it arrives. New output is followed automatically like terminal mode; auto-follow pauses if you scroll up and resumes when the cursor returns to the last line. The buffer name tracks state as `flow://<source_key> [running]`, `flow://<source_key> [done]`, or `flow://<source_key> [failed:N]`. Press `<C-c>` while focused on the flow buffer to interrupt the running job. Terminal cursor-control sequences are stripped from the rendered text, so progress-style redraws degrade to plain text instead of leaking raw escape codes. Full carriage-return/progress-line emulation is not part of this mode.
 - Debug runner: `runner: debug` or `:FlowDebug` (requires `nvim-dap`)
 
 If your commands print wide tables, long paths, or text-heavy logs, buffer mode is usually the better fit. It keeps the same split UX while rendering output like a normal wrapped buffer instead of a fixed-width terminal.
@@ -303,7 +303,7 @@ This repo includes a VHS tape at `vhs/nvim-flow-demo.tape` that records a demo u
 
 The demo shows:
 
-1. `:FlowRun` — execute the command in a terminal split
+1. `:FlowRun` — execute the command in the configured split output mode
 2. Set a breakpoint with `<space>db`, then `:FlowDebug` (`nvim-dap`)
 
 Run it with:

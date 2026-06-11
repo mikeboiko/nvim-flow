@@ -148,10 +148,13 @@ end
 
 local function build_buffer_name(cmd_def, exit_code)
 	local source_key = cmd_def.source_key or "run"
-	if exit_code and exit_code ~= 0 then
-		return ("flow://%s (%d)"):format(source_key, exit_code)
+	if exit_code == nil then
+		return ("flow://%s [running]"):format(source_key)
 	end
-	return "flow://" .. source_key
+	if exit_code == 0 then
+		return ("flow://%s [done]"):format(source_key)
+	end
+	return ("flow://%s [failed:%d]"):format(source_key, exit_code)
 end
 
 local function job_is_running(job_id)

@@ -209,7 +209,7 @@ describe("nvim-flow runner", function()
 			assert.is_falsy(line:find("%[Process exited %d+%]"))
 		end
 		assert.is_true(found, "expected 'hello-flow' in output lines")
-		assert.are.equal("flow://run", vim.api.nvim_buf_get_name(runner.last_terminal_buf))
+		assert.are.equal("flow://run [done]", vim.api.nvim_buf_get_name(runner.last_terminal_buf))
 	end)
 
 	it("buffer mode streams output before the job exits", function()
@@ -230,11 +230,17 @@ describe("nvim-flow runner", function()
 			return #runner.last_output_lines == 1 and runner.last_output_lines[1] == "first"
 		end, 20)
 		assert.is_true(saw_first, "expected first line before process exit")
+		assert.are.equal("flow://run [running]", vim.api.nvim_buf_get_name(runner.last_terminal_buf))
 
 		local saw_second = vim.wait(5000, function()
 			return #runner.last_output_lines >= 2 and runner.last_output_lines[2] == "second"
 		end, 20)
 		assert.is_true(saw_second, "expected second line after streaming completes")
+
+		local finished = vim.wait(5000, function()
+			return vim.api.nvim_buf_get_name(runner.last_terminal_buf) == "flow://run [done]"
+		end, 20)
+		assert.is_true(finished, "expected done status after process exit")
 	end)
 
 	it("buffer mode ctrl+c interrupts the running job", function()
@@ -269,7 +275,7 @@ describe("nvim-flow runner", function()
 
 		local interrupted = vim.wait(5000, function()
 			local name = vim.api.nvim_buf_get_name(runner.last_terminal_buf)
-			return name:match("^flow://run %(%d+%)$") ~= nil
+			return name:match("^flow://run %[%a+:%d+%]$") ~= nil
 		end, 20)
 		assert.is_true(interrupted, "expected interrupt to stop the running job")
 
@@ -309,14 +315,14 @@ describe("nvim-flow runner", function()
 		assert.is_true(ok)
 
 		vim.wait(5000, function()
-			return vim.api.nvim_buf_get_name(runner.last_terminal_buf) == "flow://sh (42)"
+			return vim.api.nvim_buf_get_name(runner.last_terminal_buf) == "flow://sh [failed:42]"
 		end, 50)
 
 		assert.are.equal("failing", runner.last_output_lines[#runner.last_output_lines])
 		for _, line in ipairs(runner.last_output_lines) do
 			assert.is_falsy(line:find("%[Process exited %d+%]"))
 		end
-		assert.are.equal("flow://sh (42)", vim.api.nvim_buf_get_name(runner.last_terminal_buf))
+		assert.are.equal("flow://sh [failed:42]", vim.api.nvim_buf_get_name(runner.last_terminal_buf))
 
 		-- Buffer should still be valid and visible
 		assert.is_true(vim.api.nvim_buf_is_valid(runner.last_terminal_buf))

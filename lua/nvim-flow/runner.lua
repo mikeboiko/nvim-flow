@@ -165,7 +165,7 @@ local function job_is_running(job_id)
 	return status == -1
 end
 
-function M.interrupt_buffer_job(bufnr)
+function M.is_buffer_job_running(bufnr)
 	bufnr = bufnr or vim.api.nvim_get_current_buf()
 	if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
 		return false
@@ -174,11 +174,20 @@ function M.interrupt_buffer_job(bufnr)
 	local ok, job_id = pcall(function()
 		return vim.b[bufnr].nvim_flow_job_id
 	end)
-	if not ok or not job_is_running(job_id) then
+	if not ok then
 		return false
 	end
 
-	vim.fn.chansend(job_id, string.char(3))
+	return job_is_running(job_id)
+end
+
+function M.interrupt_buffer_job(bufnr)
+	bufnr = bufnr or vim.api.nvim_get_current_buf()
+	if not M.is_buffer_job_running(bufnr) then
+		return false
+	end
+
+	vim.fn.chansend(vim.b[bufnr].nvim_flow_job_id, string.char(3))
 	return true
 end
 

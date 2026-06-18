@@ -15,7 +15,7 @@ demo.py:
 
 Open the file in Neovim and run `:FlowRun` or `:FlowDebug` — nvim-flow resolves the command for the current file and executes it in a split. In the default buffer mode, output is rendered in a normal Neovim buffer so narrow splits do not hard-wrap PTY output:
 
-![](https://vhs.charm.sh/vhs-7qyKf92kox9kfiI2KA9ZK4.gif)
+![](https://vhs.charm.sh/vhs-7o5y5MWo1Rrr6436Abyb2e.gif)
 
 ## Motivation
 
@@ -276,6 +276,14 @@ All found configs are merged. Closer files override farther files.
 - Debug runner: `runner: debug` or `:FlowDebug` (requires `nvim-dap`)
 
 If your commands print wide tables, long paths, or text-heavy logs, buffer mode is usually the better fit. It keeps the same split UX while rendering output like a normal wrapped buffer instead of a fixed-width terminal.
+
+### Integration hooks
+
+Flow output buffers are tagged so external cleanup/session logic can recognize and protect them:
+
+- `b:nvim_flow_terminal = 1` marks both terminal- and buffer-mode flow buffers.
+- `b:nvim_flow_job_id` holds the running job id in buffer mode while a command is in flight, and is cleared on exit.
+- `require("nvim-flow.runner").is_buffer_job_running(bufnr)` reports whether a buffer-mode job is still alive. Unlike terminal buffers, buffer-mode output lives in a normal `nofile` buffer, so Neovim's native "job still running" protection does not apply — use this helper before force-closing flow buffers (e.g. in a "close all" mapping) to avoid killing a running command.
 
 ## Quickfix behavior
 

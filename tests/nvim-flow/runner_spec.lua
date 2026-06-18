@@ -287,6 +287,38 @@ describe("nvim-flow runner", function()
 		assert.is_false(runner.interrupt_buffer_job(runner.last_terminal_buf))
 	end)
 
+	it("buffer mode exposes is_buffer_job_running for cleanup integrations", function()
+		vim.cmd("edit " .. vim.fn.fnameescape(target))
+
+		-- A plain buffer with no flow job should never report running.
+		assert.is_false(runner.is_buffer_job_running(vim.api.nvim_create_buf(false, true)))
+
+		local ok = runner.run({
+			cmd = "#!/usr/bin/env bash\nprintf 'first\\n'; sleep 5; printf 'second\\n'",
+			filepath = target,
+			runner = "terminal",
+		}, {
+			output_mode = "buffer",
+			terminal_height = 5,
+			show_command = false,
+		})
+		assert.is_true(ok)
+
+		local buf = runner.last_terminal_buf
+		local saw_first = vim.wait(1500, function()
+			return #runner.last_output_lines >= 1
+		end, 20)
+		assert.is_true(saw_first, "expected first line while running")
+		assert.is_true(runner.is_buffer_job_running(buf), "expected running job to report true")
+
+		assert.is_true(runner.interrupt_buffer_job(buf))
+
+		local stopped = vim.wait(5000, function()
+			return not runner.is_buffer_job_running(buf)
+		end, 20)
+		assert.is_true(stopped, "expected job to report not-running after interrupt")
+	end)
+
 	it("show_command in buffer mode strips shebang and adds Lua-generated separator", function()
 		local header = runner._build_buffer_header_for_test("#!/usr/bin/env bash\npython /tmp/test.py --verbose")
 		assert.are.equal("python /tmp/test.py --verbose", header[1])

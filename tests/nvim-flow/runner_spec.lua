@@ -319,6 +319,110 @@ describe("nvim-flow runner", function()
 		assert.is_true(stopped, "expected job to report not-running after interrupt")
 	end)
 
+	it("buffer mode forwards stdin to the running job", function()
+		vim.cmd("edit " .. vim.fn.fnameescape(target))
+
+		local ok = runner.run({
+			cmd = "#!/usr/bin/env bash\nread -p 'continue? (y/n): ' ans\necho \"ANSWER=[$ans]\"",
+			filepath = target,
+			runner = "terminal",
+		}, {
+			output_mode = "buffer",
+			terminal_height = 5,
+			show_command = false,
+		})
+		assert.is_true(ok)
+
+		local buf = runner.last_terminal_buf
+
+		local saw_prompt = vim.wait(3000, function()
+			for _, line in ipairs(runner.last_output_lines) do
+				if line:find("y/n", 1, true) then
+					return true
+				end
+			end
+			return false
+		end, 20)
+		assert.is_true(saw_prompt, "expected prompt before sending input")
+
+		-- Cannot send to a buffer with no running job.
+		assert.is_false(runner.send_buffer_input(vim.api.nvim_create_buf(false, true), "y\n"))
+		assert.is_true(runner.send_buffer_input(buf, "y\n"))
+
+		local saw_answer = vim.wait(4000, function()
+			for _, line in ipairs(runner.last_output_lines) do
+				if line:find("ANSWER=[y]", 1, true) then
+					return true
+				end
+			end
+			return false
+		end, 20)
+		assert.is_true(saw_answer, "expected the job to consume forwarded stdin")
+	end)
+
+	it("buffer mode maps insert keys to prompt for input while running", function()
+		vim.cmd("edit " .. vim.fn.fnameescape(target))
+
+		local ok = runner.run({
+			cmd = "#!/usr/bin/env bash\nread -p 'continue? (y/n): ' ans\necho \"ANSWER=[$ans]\"",
+			filepath = target,
+			runner = "terminal",
+		}, {
+			output_mode = "buffer",
+			terminal_height = 5,
+			show_command = false,
+		})
+		assert.is_true(ok)
+
+		local buf = runner.last_terminal_buf
+		local function has_map(lhs)
+			for _, km in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do
+				if km.lhs == lhs then
+					return true
+				end
+			end
+			return false
+		end
+
+		vim.wait(3000, function()
+			for _, line in ipairs(runner.last_output_lines) do
+				if line:find("y/n", 1, true) then
+					return true
+				end
+			end
+			return false
+		end, 20)
+
+		for _, key in ipairs({ "i", "a", "I", "A" }) do
+			assert.is_true(has_map(key), "expected buffer-local " .. key .. " mapping while running")
+		end
+
+		-- prompt_buffer_input should funnel a line through stdin via vim.ui.input.
+		local original_input = vim.ui.input
+		vim.ui.input = function(_, on_confirm)
+			on_confirm("y")
+		end
+		runner.prompt_buffer_input(buf)
+		vim.ui.input = original_input
+
+		local saw_answer = vim.wait(4000, function()
+			for _, line in ipairs(runner.last_output_lines) do
+				if line:find("ANSWER=[y]", 1, true) then
+					return true
+				end
+			end
+			return false
+		end, 20)
+		assert.is_true(saw_answer, "expected prompt_buffer_input to forward the line")
+
+		vim.wait(2000, function()
+			return not runner.is_buffer_job_running(buf)
+		end, 20)
+		for _, key in ipairs({ "i", "a", "I", "A" }) do
+			assert.is_false(has_map(key), "expected " .. key .. " mapping removed after exit")
+		end
+	end)
+
 	it("show_command in buffer mode strips shebang and adds Lua-generated separator", function()
 		local header = runner._build_buffer_header_for_test("#!/usr/bin/env bash\npython /tmp/test.py --verbose")
 		assert.are.equal("python /tmp/test.py --verbose", header[1])

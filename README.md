@@ -15,7 +15,7 @@ demo.py:
 
 Open the file in Neovim and run `:FlowRun` or `:FlowDebug` — nvim-flow resolves the command for the current file and executes it in a split. In the default buffer mode, output is rendered in a normal Neovim buffer so narrow splits do not hard-wrap PTY output:
 
-![](https://vhs.charm.sh/vhs-7o5y5MWo1Rrr6436Abyb2e.gif)
+![](https://vhs.charm.sh/vhs-6ymiZ5pnDCQfrdUn3ClTqz.gif)
 
 ## Motivation
 
@@ -272,7 +272,7 @@ All found configs are merged. Closer files override farther files.
 - Terminal split opens at the top by default; set `terminal_position = "bottom"` to open below.
 - With `show_command = true`, the separator line is sized to the command width (capped by terminal width in terminal mode; display width in buffer mode).
 - `output_mode = "terminal"` uses Neovim's terminal/PTY path. Long lines follow the PTY width, so narrow splits hard-wrap output just like any other terminal pane.
-- `output_mode = "buffer"` uses a normal scratch buffer for display, preventing hard-wrap on long lines. The buffer has soft-wrap and linebreak enabled. Commands run in a PTY-backed job with the split width/height so terminal-aware programs and `stty size` still see terminal dimensions, and output streams into the buffer as it arrives. New output is followed automatically like terminal mode; auto-follow pauses if you scroll up and resumes when the cursor returns to the last line. The buffer name tracks state as `flow://<source_key> [running]`, `flow://<source_key> [done]`, or `flow://<source_key> [failed:N]`. Press `<C-c>` while focused on the flow buffer to interrupt the running job. Terminal cursor-control sequences are stripped from the rendered text, so progress-style redraws degrade to plain text instead of leaking raw escape codes. Full carriage-return/progress-line emulation is not part of this mode.
+- `output_mode = "buffer"` uses a normal scratch buffer for display, preventing hard-wrap on long lines. The buffer has soft-wrap and linebreak enabled. Commands run in a PTY-backed job with the split width/height so terminal-aware programs and `stty size` still see terminal dimensions, and output streams into the buffer as it arrives. New output is followed automatically like terminal mode; auto-follow pauses if you scroll up and resumes when the cursor returns to the last line. The buffer name tracks state as `flow://<source_key> [running]`, `flow://<source_key> [done]`, or `flow://<source_key> [failed:N]`. Press `<C-c>` while focused on the flow buffer to interrupt the running job. To answer an interactive prompt (e.g. a `y/n` question), press `i`/`a` while focused on the running flow buffer — nvim-flow asks for a line and forwards it to the job's stdin. Terminal cursor-control sequences are stripped from the rendered text, so progress-style redraws degrade to plain text instead of leaking raw escape codes. Full carriage-return/progress-line emulation is not part of this mode.
 - Debug runner: `runner: debug` or `:FlowDebug` (requires `nvim-dap`)
 
 If your commands print wide tables, long paths, or text-heavy logs, buffer mode is usually the better fit. It keeps the same split UX while rendering output like a normal wrapped buffer instead of a fixed-width terminal.
@@ -284,6 +284,7 @@ Flow output buffers are tagged so external cleanup/session logic can recognize a
 - `b:nvim_flow_terminal = 1` marks both terminal- and buffer-mode flow buffers.
 - `b:nvim_flow_job_id` holds the running job id in buffer mode while a command is in flight, and is cleared on exit.
 - `require("nvim-flow.runner").is_buffer_job_running(bufnr)` reports whether a buffer-mode job is still alive. Unlike terminal buffers, buffer-mode output lives in a normal `nofile` buffer, so Neovim's native "job still running" protection does not apply — use this helper before force-closing flow buffers (e.g. in a "close all" mapping) to avoid killing a running command.
+- `require("nvim-flow.runner").send_buffer_input(bufnr, text)` forwards `text` verbatim to a running buffer-mode job's stdin (include a trailing `\n` to submit a line); `prompt_buffer_input(bufnr)` asks for a line via `vim.ui.input` and sends it. These power the built-in `i`/`a` mappings and let you script interactive responses.
 
 ## Quickfix behavior
 

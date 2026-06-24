@@ -191,6 +191,37 @@ function M.interrupt_buffer_job(bufnr)
 	return true
 end
 
+--- Send raw text to a running buffer-mode job's stdin (PTY).
+--- Text is sent verbatim; include a trailing "\n" to submit a line.
+---@param bufnr number|nil Buffer handle (defaults to current)
+---@param text string Text to send
+---@return boolean sent
+function M.send_buffer_input(bufnr, text)
+	bufnr = bufnr or vim.api.nvim_get_current_buf()
+	if type(text) ~= "string" or not M.is_buffer_job_running(bufnr) then
+		return false
+	end
+
+	vim.fn.chansend(vim.b[bufnr].nvim_flow_job_id, text)
+	return true
+end
+
+--- Prompt for a line of input and send it (with newline) to a buffer-mode job.
+---@param bufnr number|nil Buffer handle (defaults to current)
+function M.prompt_buffer_input(bufnr)
+	bufnr = bufnr or vim.api.nvim_get_current_buf()
+	if not M.is_buffer_job_running(bufnr) then
+		return
+	end
+
+	vim.ui.input({ prompt = "flow input> " }, function(input)
+		if input == nil then
+			return
+		end
+		M.send_buffer_input(bufnr, input .. "\n")
+	end)
+end
+
 local function run_buffer(cmd_def, opts)
 	local show_command = opts.show_command ~= false
 	local terminal_height = tonumber(opts.terminal_height) or 15
@@ -403,6 +434,9 @@ local function run_buffer(cmd_def, opts)
 				vim.b[buf].nvim_flow_job_id = nil
 			end
 			pcall(vim.keymap.del, "n", "<C-c>", { buffer = buf })
+			for _, key in ipairs({ "i", "a", "I", "A" }) do
+				pcall(vim.keymap.del, "n", key, { buffer = buf })
+			end
 		end
 
 		-- Ignore stale callbacks from superseded runs
@@ -451,6 +485,22 @@ local function run_buffer(cmd_def, opts)
 		nowait = true,
 		desc = "Flow interrupt",
 	})
+
+	-- The output buffer is a non-terminal scratch buffer, so the usual insert
+	-- keys do nothing. While the PTY job is alive, repurpose them to prompt for
+	-- a line of input and forward it to the job's stdin (e.g. answering a y/n
+	-- prompt), mirroring pressing `i` to interact in terminal mode.
+	for _, key in ipairs({ "i", "a", "I", "A" }) do
+		vim.keymap.set("n", key, function()
+			M.prompt_buffer_input(buf)
+		end, {
+			buffer = buf,
+			silent = true,
+			nowait = true,
+			desc = "Flow send input",
+		})
+	end
+
 	restore_source_window()
 	return true
 end

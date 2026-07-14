@@ -15,7 +15,7 @@ demo.py:
 
 Open the file in Neovim and run `:FlowRun` or `:FlowDebug` — nvim-flow resolves the command for the current file and executes it in a split. In the default buffer mode, output is rendered in a normal Neovim buffer so narrow splits do not hard-wrap PTY output:
 
-![](https://vhs.charm.sh/vhs-6ymiZ5pnDCQfrdUn3ClTqz.gif)
+![](https://vhs.charm.sh/vhs-2my8DhqH0BXx9IsO9rOmlR.gif)
 
 ## Motivation
 
@@ -44,6 +44,7 @@ I wanted a workflow that matches how I actually work in Neovim: simple YAML conf
 ## Features
 
 - First-class `nvim-dap` integration through `:FlowDebug`
+- Run the entry under the cursor straight from a `.flow.yml` buffer (`:FlowRunHere`)
 - Flow source jump (`:FlowEdit`) to open the matched `.flow.yml` definition
 - File lock support (`:FlowToggleLock`)
 - Command preview in a floating window (`:FlowPreview`)
@@ -70,7 +71,7 @@ return {
   {
     "mikeboiko/nvim-flow",
     event = { "BufReadPost", "BufNewFile" },
-    cmd = { "FlowRun", "FlowDebug", "FlowEdit", "FlowToggleLock", "FlowPreview", "FlowQuickfix" },
+    cmd = { "FlowRun", "FlowRunHere", "FlowDebug", "FlowEdit", "FlowToggleLock", "FlowPreview", "FlowQuickfix" },
     opts = {
       config_file = ".flow.yml",
       terminal_height = 15,
@@ -147,6 +148,7 @@ require("nvim-flow").setup({
 ## Commands
 
 - `:FlowRun` - run the resolved flow command in the configured split output mode
+- `:FlowRunHere` - run the flow entry under the cursor directly from a `.flow.yml` buffer
 - `:FlowDebug` - resolve the same flow command and launch a matching `nvim-dap` debug session
 - `:FlowEdit` - open the matched `.flow.yml` file and jump to the resolved command line
 - `:FlowToggleLock[ {filepath}]` - toggle lock (or set lock to explicit path)
@@ -159,6 +161,28 @@ require("nvim-flow").setup({
 `FlowEdit` follows the same resolution pipeline as `FlowRun` / `FlowPreview`, then opens the corresponding `.flow.yml` and jumps to the resolved command line.
 
 By default it opens in a new tab (`edit_open_command = "tabedit"`). Change `edit_open_command` if you prefer `edit`, `split`, or `vsplit`.
+
+## Run from `.flow.yml` (`:FlowRunHere`)
+
+Sometimes you want to launch a flow without opening its source file. From inside a `.flow.yml` buffer, place the cursor anywhere in an entry's block (its key, `match`, `cmd`, or comments) and run `:FlowRunHere`. nvim-flow runs the entry the cursor sits in, bypassing match resolution entirely. It reads the live buffer, so unsaved edits are honored.
+
+The `run` keymap is context-aware: inside a `.flow.yml` buffer it runs the entry under the cursor (like `:FlowRunHere`), and everywhere else it runs the flow resolved for the current file (like `:FlowRun`). A single mapping — for example `run = "<CR>"` — therefore covers both.
+
+Entries that use no file-scoped template variables (`{{filepath}}`, `{{filename}}`, `{{ext}}`) run as-is — ideal for named, project-level tasks. When an entry _does_ use a file-scoped variable, nvim-flow resolves a single source file with this precedence:
+
+1. the locked file, if one is set (`:FlowSet` / `:FlowToggleLock`)
+2. otherwise the entry's `match`/key path patterns are globbed under the repo root, requiring exactly one match
+
+If a file-scoped variable is used but zero or multiple files match (and no lock is set), the run is aborted with a message — narrow the `match`, or set a lock. Project variables (`{{dir}}`, `{{repo}}`, `{{folder}}`) resolve from the resolved source file, or from the `.flow.yml`'s own location when no source file is needed.
+
+```yaml
+compare-prosafe-pou:
+  match: ['**/compare/prosafe/pou.py']
+  cmd: |
+    uv run yok compare prosafe pou /mnt/nas /mnt/hp --controller SCS0130 --detail
+```
+
+Running `:FlowRunHere` anywhere in this block executes the command directly. Because it uses no file-scoped variables, no source file is resolved.
 
 ## Debug integration (`nvim-dap`)
 
@@ -323,7 +347,7 @@ Run it with:
 
 The script records `vhs/nvim-flow-demo.gif`, publishes it to `vhs.charm.sh`, rewrites the README demo embed URL, and stages the README update.
 
-`lefthook` also runs that script before commit when staged changes touch the demo surface (`.lefthook.yml`, `README.md`, `lua/`, `plugin/`, or `vhs/` files other than the generated GIF itself).
+`lefthook` runs that script before commit on the `main` branch when staged changes include Lua files (`**/*.lua`). On other branches it is skipped, so feature-branch commits stay fast and do not rewrite the demo embed.
 
 ## Credit
 

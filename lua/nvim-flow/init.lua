@@ -67,6 +67,24 @@ local function setup_keymaps()
 		end
 	end
 
+	local config_file = state.opts.config_file or ".flow.yml"
+
+	local function is_flow_config_buffer(bufnr)
+		local name = vim.api.nvim_buf_get_name(bufnr)
+		return name ~= "" and vim.fs.basename(name) == config_file
+	end
+
+	local function run_here_from_current()
+		local snapshot = {
+			buf = vim.api.nvim_get_current_buf(),
+			name = vim.api.nvim_buf_get_name(0),
+			lnum = vim.api.nvim_win_get_cursor(0)[1],
+			lines = vim.api.nvim_buf_get_lines(0, 0, -1, false),
+		}
+		pre_flow_action()
+		require("nvim-flow").run_here(snapshot)
+	end
+
 	local function set_run_mapping(bufnr)
 		if not vim.api.nvim_buf_is_valid(bufnr) then
 			return
@@ -75,9 +93,16 @@ local function setup_keymaps()
 			return
 		end
 
+		-- One keymap, context-aware: inside a `.flow.yml` buffer it runs the
+		-- entry under the cursor; anywhere else it runs the flow resolved for
+		-- the current file.
 		vim.keymap.set("n", keymaps.run, function()
-			pre_flow_action()
-			require("nvim-flow").run()
+			if is_flow_config_buffer(vim.api.nvim_get_current_buf()) then
+				run_here_from_current()
+			else
+				pre_flow_action()
+				require("nvim-flow").run()
+			end
 		end, { buffer = bufnr, silent = true, desc = "Flow run" })
 	end
 
@@ -148,6 +173,56 @@ function M.run()
 	local ok, err = runner.run(cmd_def, state.opts)
 	if not ok then
 		notify(err, vim.log.levels.ERROR)
+	end
+end
+
+--- Run the flow entry the cursor sits in, directly from a `.flow.yml` buffer.
+--- `snapshot` (optional) captures the buffer/cursor before pre-flow actions so
+--- resolution is unaffected by window changes.
+function M.run_here(snapshot)
+	local buf = snapshot and snapshot.buf or vim.api.nvim_get_current_buf()
+	local name = snapshot and snapshot.name or vim.api.nvim_buf_get_name(buf)
+	if not name or name == "" then
+		notify("current buffer has no file path", vim.log.levels.WARN)
+		return
+	end
+
+	local config_file = state.opts.config_file or ".flow.yml"
+	if vim.fs.basename(name) ~= config_file then
+		notify(("run here only works inside a `%s` buffer"):format(config_file), vim.log.levels.WARN)
+		return
+	end
+
+	local lines = snapshot and snapshot.lines
+	if not lines then
+		if not vim.api.nvim_buf_is_valid(buf) then
+			notify("flow config buffer is no longer available", vim.log.levels.WARN)
+			return
+		end
+		lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+	end
+	local lnum = snapshot and snapshot.lnum or vim.api.nvim_win_get_cursor(0)[1]
+
+	local key = config.find_key_at_line(lines, lnum)
+	if not key then
+		notify("cursor is not on a flow entry", vim.log.levels.WARN)
+		return
+	end
+
+	local cmd_def, err = config.resolve_at(vim.fs.normalize(name), key, state.opts, table.concat(lines, "\n"))
+	if not cmd_def then
+		notify(err, vim.log.levels.ERROR)
+		return
+	end
+
+	if cmd_def.runner == "debug" then
+		debug_runner.run(cmd_def)
+		return
+	end
+
+	local ok, run_err = runner.run(cmd_def, state.opts)
+	if not ok then
+		notify(run_err, vim.log.levels.ERROR)
 	end
 end
 

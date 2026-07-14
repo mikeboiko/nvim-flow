@@ -9,11 +9,12 @@ It resolves a command for the current file from YAML config and runs it in a Neo
 
 - `lua/nvim-flow/init.lua`
   - public API and `setup(opts)`
-  - command entrypoints (`run`, `debug`, `preview`, `quickfix`, `toggle_lock`)
+  - command entrypoints (`run`, `run_here`, `debug`, `preview`, `quickfix`, `toggle_lock`)
   - keymap registration
 - `lua/nvim-flow/config.lua`
   - config file discovery and merge
   - match resolution and command normalization
+  - cursor-based resolution for run-from-`.flow.yml` (`find_key_at_line`, `resolve_at`)
 - `lua/nvim-flow/yaml.lua`
   - lightweight YAML parser used by the plugin (no Python dependency)
   - stores map insertion order in `__order` for deterministic match behavior
@@ -32,7 +33,7 @@ It resolves a command for the current file from YAML config and runs it in a Neo
 - `lua/nvim-flow/quickfix.lua`
   - Python traceback parser -> quickfix list
 - `plugin/nvim-flow.lua`
-  - user command registration (`FlowRun`, `FlowDebug`, `FlowEdit`, etc.)
+  - user command registration (`FlowRun`, `FlowRunHere`, `FlowDebug`, `FlowEdit`, etc.)
 
 ## Config behavior (important)
 
@@ -51,6 +52,15 @@ It resolves a command for the current file from YAML config and runs it in a Neo
 - `match` is optional.
   - If omitted, legacy key-based matching is used.
   - If present, should be string or array.
+
+## Run from `.flow.yml` (`run_here` / `resolve_at`)
+
+- `init.run_here` runs the entry under the cursor in a `.flow.yml` buffer; it is a no-op elsewhere.
+- The single `run` keymap is context-aware: it dispatches to `run_here` inside a `.flow.yml` buffer and to `run` elsewhere (there is no separate `run_here` keymap option).
+- `config.find_key_at_line(lines, lnum)` maps a cursor line to the enclosing top-level entry key (inverse of `find_top_level_key_line`).
+- `config.resolve_at(flow_file, key, opts, text)` resolves a `cmd_def` for a single entry, bypassing match resolution. Optional `text` (live buffer content) is honored over the file on disk.
+- File-scoped vars (`{{filepath}}`, `{{filename}}`, `{{ext}}`) resolve lazily: locked file first, else glob the entry's path-like `match`/key under the repo root and require exactly one file, else abort. Entries with no file-scoped vars run with the `.flow.yml`'s own dir/repo/folder context.
+- Coverage: `resolve_at`/`find_key_at_line` in `tests/nvim-flow/config_spec.lua`; run_here glue in `tests/nvim-flow/init_spec.lua`.
 
 ## Deterministic matching notes
 

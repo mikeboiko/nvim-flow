@@ -234,6 +234,39 @@ function M.find_source_location(source_key, source_files)
 	return nil, ("unable to locate `%s` in resolved flow files"):format(source_key)
 end
 
+-- Inverse of find_top_level_key_line: given raw config lines and a 1-based
+-- cursor line, return the nearest top-level (indent-0, non-comment) key at or
+-- above the cursor, i.e. the flow entry the cursor sits in.
+function M.find_key_at_line(lines, lnum)
+	if type(lines) ~= "table" then
+		return nil
+	end
+
+	local total = #lines
+	if total == 0 then
+		return nil
+	end
+
+	local start = tonumber(lnum) or total
+	if start < 1 then
+		start = 1
+	elseif start > total then
+		start = total
+	end
+
+	for idx = start, 1, -1 do
+		local line = lines[idx]
+		if type(line) == "string" and line:match("%S") and count_indent(line) == 0 and not line:match("^#") then
+			local key = line:match("^([^%s:][^:]-):")
+			if key then
+				return key, idx
+			end
+		end
+	end
+
+	return nil
+end
+
 local function has_glob(pattern)
 	return pattern:find("[%*%?%[]") ~= nil
 end
@@ -413,6 +446,185 @@ function M.resolve(filepath, opts)
 
 	cmd_def.filepath = ctx.filepath
 	cmd_def.source_files = source_files
+	return cmd_def
+end
+
+local FILE_SCOPED_VARS = { "filepath", "filename", "ext" }
+
+-- File-scoped template vars only make sense with a concrete source file, so
+-- cursor-runs resolve one lazily (only when such a var is actually used).
+local function cmd_uses_file_scoped_var(cmd)
+	if type(cmd) ~= "string" then
+		return false
+	end
+	for _, name in ipairs(FILE_SCOPED_VARS) do
+		if cmd:find("{{%s*" .. name .. "%s*}}") then
+			return true
+		end
+	end
+	return false
+end
+
+local function looks_like_path_pattern(value)
+	if type(value) ~= "string" then
+		return false
+	end
+	return value:find("/") ~= nil or value:find("[%*%?%[%]]") ~= nil or value:match("%.[%w]+$") ~= nil
+end
+
+local function glob_under(root, pattern)
+	local full
+	if pattern:sub(1, 1) == "/" then
+		full = pattern
+	elseif pattern:find("/") then
+		full = root .. "/" .. pattern
+	else
+		full = root .. "/**/" .. pattern
+	end
+
+	local ok, result = pcall(vim.fn.glob, full, true, true)
+	if not ok or type(result) ~= "table" then
+		return {}
+	end
+	return result
+end
+
+local function candidate_patterns(key, entry)
+	local patterns = {}
+	local seen = {}
+	local function add(value)
+		value = trim(tostring(value or ""))
+		if value ~= "" and looks_like_path_pattern(value) and not seen[value] then
+			seen[value] = true
+			table.insert(patterns, value)
+		end
+	end
+
+	local match = entry.match
+	if type(match) == "string" then
+		match = { match }
+	end
+	if is_list(match) then
+		for _, pattern in ipairs(match) do
+			add(pattern)
+		end
+	end
+	add(key)
+
+	return patterns
+end
+
+-- Resolve the single source file an entry references, for filling file-scoped
+-- template vars: locked file wins, otherwise glob the entry's path-like
+-- match/key patterns under the repo root and require exactly one match.
+local function resolve_entry_file(flow_file, key, entry)
+	local locked = require("nvim-flow.lock").get()
+	if locked then
+		return path.to_absolute(locked)
+	end
+
+	local search_base = path.detect_repo_root(flow_file) or vim.fs.dirname(flow_file)
+
+	local matches = {}
+	local seen = {}
+	for _, pattern in ipairs(candidate_patterns(key, entry)) do
+		for _, found in ipairs(glob_under(search_base, pattern)) do
+			local abs = path.normalize(found)
+			if abs and vim.fn.filereadable(abs) == 1 and not seen[abs] then
+				seen[abs] = true
+				table.insert(matches, abs)
+			end
+		end
+	end
+
+	if #matches == 0 then
+		return nil,
+			("`%s` uses a file-scoped template variable but no file matched its `match`/key under %s; open the target file, or set a lock with :FlowSet"):format(
+				key,
+				search_base
+			)
+	end
+	if #matches > 1 then
+		table.sort(matches)
+		return nil,
+			("`%s` matched %d files under %s; expected exactly one. Narrow the `match`, or set a lock with :FlowSet"):format(
+				key,
+				#matches,
+				search_base
+			)
+	end
+
+	return matches[1]
+end
+
+-- Context used when an entry needs no source file: project vars derive from the
+-- defining .flow.yml's own location.
+local function config_context(flow_file)
+	local dir = vim.fs.dirname(flow_file)
+	return {
+		filepath = flow_file,
+		dir = dir,
+		basename = vim.fs.basename(flow_file),
+		filename = "",
+		ext = "",
+		dotext = "",
+		folder = vim.fs.basename(dir),
+		repo = path.detect_repo_name(flow_file),
+	}
+end
+
+-- Resolve a cmd_def for a single entry `key` defined in `flow_file`, as used by
+-- run-from-.flow.yml. `text` (optional) is the live buffer content, so unsaved
+-- edits are honored without forcing a write.
+function M.resolve_at(flow_file, key, opts, text)
+	opts = opts or {}
+	if type(key) ~= "string" or key == "" then
+		return nil, "no flow entry under cursor"
+	end
+	flow_file = path.to_absolute(flow_file)
+
+	local flow_defs, err
+	if text ~= nil then
+		flow_defs, err = yaml.decode(text)
+		if not flow_defs then
+			return nil, ("Failed parsing %s: %s"):format(flow_file, err)
+		end
+		if type(flow_defs) ~= "table" then
+			flow_defs = {}
+		end
+	else
+		flow_defs, err = M.load_file(flow_file)
+		if not flow_defs then
+			return nil, err
+		end
+	end
+
+	local entry = flow_defs[key]
+	if type(entry) ~= "table" then
+		return nil, ("no flow entry `%s` found in %s"):format(key, vim.fs.basename(flow_file))
+	end
+	if type(entry.cmd) ~= "string" then
+		return nil, ("entry `%s` must define a string `cmd`"):format(key)
+	end
+
+	local ctx
+	if cmd_uses_file_scoped_var(entry.cmd) then
+		local file, file_err = resolve_entry_file(flow_file, key, entry)
+		if not file then
+			return nil, file_err
+		end
+		ctx = path.build_context(file)
+	else
+		ctx = config_context(flow_file)
+	end
+
+	local cmd_def, normalize_err = M.normalize_cmd_def(key, entry, ctx)
+	if not cmd_def then
+		return nil, normalize_err
+	end
+
+	cmd_def.filepath = ctx.filepath
+	cmd_def.source_files = { flow_file }
 	return cmd_def
 end
 

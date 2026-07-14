@@ -25,25 +25,28 @@ function M.split_filename(basename)
 	return filename, ext, "." .. ext
 end
 
-function M.detect_repo_name(filepath)
+function M.detect_repo_root(filepath)
 	local start = vim.fs.dirname(filepath)
-	local root = nil
 	if vim.fs.root then
-		root = vim.fs.root(start, { ".git" })
-	else
-		local dir = start
-		while dir and dir ~= "" do
-			if uv.fs_stat(dir .. "/.git") then
-				root = dir
-				break
-			end
-			local parent = vim.fs.dirname(dir)
-			if not parent or parent == dir then
-				break
-			end
-			dir = parent
-		end
+		return vim.fs.root(start, { ".git" })
 	end
+
+	local dir = start
+	while dir and dir ~= "" do
+		if uv.fs_stat(dir .. "/.git") then
+			return dir
+		end
+		local parent = vim.fs.dirname(dir)
+		if not parent or parent == dir then
+			break
+		end
+		dir = parent
+	end
+	return nil
+end
+
+function M.detect_repo_name(filepath)
+	local root = M.detect_repo_root(filepath)
 	if root then
 		return vim.fs.basename(root)
 	end

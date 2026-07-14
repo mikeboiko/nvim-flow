@@ -267,3 +267,144 @@ sync.yaml:
 		assert.are.equal(4, location.line)
 	end)
 end)
+
+describe("nvim-flow find_key_at_line", function()
+	local text = table.concat({
+		"# header comment", -- 1
+		"first:", -- 2
+		"  cmd: echo one", -- 3
+		"", -- 4
+		"# between comment", -- 5
+		"second:", -- 6
+		"  match: '**/x.py'", -- 7
+		"  # inner comment", -- 8
+		"  cmd: |", -- 9
+		"    echo two", -- 10
+		"    echo three", -- 11
+	}, "\n")
+	local lines = vim.split(text, "\n", { plain = true })
+
+	it("returns the key when the cursor is on the key line", function()
+		assert.are.equal("first", config.find_key_at_line(lines, 2))
+		assert.are.equal("second", config.find_key_at_line(lines, 6))
+	end)
+
+	it("returns the enclosing key from inside a block", function()
+		assert.are.equal("first", config.find_key_at_line(lines, 3))
+		assert.are.equal("second", config.find_key_at_line(lines, 8))
+		assert.are.equal("second", config.find_key_at_line(lines, 10))
+		assert.are.equal("second", config.find_key_at_line(lines, 11))
+	end)
+
+	it("returns nil above the first entry", function()
+		assert.is_nil(config.find_key_at_line(lines, 1))
+	end)
+
+	it("clamps out-of-range line numbers", function()
+		assert.are.equal("second", config.find_key_at_line(lines, 999))
+	end)
+end)
+
+describe("nvim-flow resolve_at (run from .flow.yml)", function()
+	local root = nil
+	local lock = require("nvim-flow.lock")
+
+	before_each(function()
+		root = vim.fn.tempname()
+		vim.fn.mkdir(root, "p")
+		lock.clear()
+	end)
+
+	after_each(function()
+		lock.clear()
+		if root then
+			vim.fn.delete(root, "rf")
+		end
+	end)
+
+	it("runs a var-free entry using the config file's own context", function()
+		local flow_file = root .. "/proj/.flow.yml"
+		vim.fn.mkdir(root .. "/proj/.git", "p")
+		write_file(flow_file, "deploy:\n  cmd: echo deploy {{repo}} {{folder}}\n")
+
+		local cmd_def = assert(config.resolve_at(flow_file, "deploy", { config_file = ".flow.yml" }))
+		assert.are.equal("deploy", cmd_def.source_key)
+		assert.is_true(contains(cmd_def.cmd, "echo deploy proj proj"))
+	end)
+
+	it("fills {{filepath}} from a match glob that resolves to exactly one file", function()
+		local flow_file = root .. "/proj/.flow.yml"
+		vim.fn.mkdir(root .. "/proj/.git", "p")
+		local target = root .. "/proj/src/app.py"
+		write_file(target, "print('x')\n")
+		write_file(flow_file, "run-app:\n  match: ['**/app.py']\n  cmd: python {{filepath}}\n")
+
+		local cmd_def = assert(config.resolve_at(flow_file, "run-app", { config_file = ".flow.yml" }))
+		assert.are.equal(vim.fs.normalize(target), cmd_def.filepath)
+		assert.is_true(contains(cmd_def.cmd, "python " .. vim.fs.normalize(target)))
+	end)
+
+	it("resolves a bare-basename key for file-scoped vars", function()
+		local flow_file = root .. "/proj/.flow.yml"
+		vim.fn.mkdir(root .. "/proj/.git", "p")
+		local target = root .. "/proj/nested/demo.py"
+		write_file(target, "print('x')\n")
+		write_file(flow_file, "demo.py:\n  cmd: python {{filepath}} --name mike\n")
+
+		local cmd_def = assert(config.resolve_at(flow_file, "demo.py", { config_file = ".flow.yml" }))
+		assert.are.equal(vim.fs.normalize(target), cmd_def.filepath)
+	end)
+
+	it("errors when a file-scoped var matches no file", function()
+		local flow_file = root .. "/proj/.flow.yml"
+		vim.fn.mkdir(root .. "/proj/.git", "p")
+		write_file(flow_file, "run-app:\n  match: ['**/missing.py']\n  cmd: python {{filepath}}\n")
+
+		local cmd_def, err = config.resolve_at(flow_file, "run-app", { config_file = ".flow.yml" })
+		assert.is_nil(cmd_def)
+		assert.is_true(contains(err, "no file matched"))
+	end)
+
+	it("errors when a file-scoped var matches multiple files", function()
+		local flow_file = root .. "/proj/.flow.yml"
+		vim.fn.mkdir(root .. "/proj/.git", "p")
+		write_file(root .. "/proj/a/app.py", "x\n")
+		write_file(root .. "/proj/b/app.py", "x\n")
+		write_file(flow_file, "run-app:\n  match: ['**/app.py']\n  cmd: python {{filepath}}\n")
+
+		local cmd_def, err = config.resolve_at(flow_file, "run-app", { config_file = ".flow.yml" })
+		assert.is_nil(cmd_def)
+		assert.is_true(contains(err, "expected exactly one"))
+	end)
+
+	it("prefers the locked file for file-scoped vars", function()
+		local flow_file = root .. "/proj/.flow.yml"
+		vim.fn.mkdir(root .. "/proj/.git", "p")
+		local locked = root .. "/elsewhere/main.py"
+		write_file(locked, "x\n")
+		lock.set(locked)
+		write_file(flow_file, "run-app:\n  match: ['**/app.py']\n  cmd: python {{filepath}}\n")
+
+		local cmd_def = assert(config.resolve_at(flow_file, "run-app", { config_file = ".flow.yml" }))
+		assert.are.equal(vim.fs.normalize(locked), cmd_def.filepath)
+		assert.is_true(contains(cmd_def.cmd, "python " .. vim.fs.normalize(locked)))
+	end)
+
+	it("honors live buffer text over the file on disk", function()
+		local flow_file = root .. "/proj/.flow.yml"
+		write_file(flow_file, "deploy:\n  cmd: echo OLD\n")
+
+		local cmd_def = assert(config.resolve_at(flow_file, "deploy", {}, "deploy:\n  cmd: echo NEW\n"))
+		assert.is_true(contains(cmd_def.cmd, "echo NEW"))
+		assert.is_false(contains(cmd_def.cmd, "echo OLD"))
+	end)
+
+	it("errors for an unknown key", function()
+		local flow_file = root .. "/proj/.flow.yml"
+		write_file(flow_file, "deploy:\n  cmd: echo hi\n")
+
+		local cmd_def, err = config.resolve_at(flow_file, "nope", { config_file = ".flow.yml" })
+		assert.is_nil(cmd_def)
+		assert.is_true(contains(err, "no flow entry"))
+	end)
+end)

@@ -112,16 +112,75 @@ local function build_script(cmd, show_command)
 	return script_path
 end
 
-function M._build_script_for_test(cmd, show_command)
-	return build_script(cmd, show_command)
-end
-
-function M._cleanup_script_for_test(script_path)
+local function cleanup_script(script_path)
 	if uv and uv.fs_unlink then
 		uv.fs_unlink(script_path)
 	else
 		os.remove(script_path)
 	end
+end
+
+-- Open a `terminal_height` split above/below the source window showing
+-- `target_buf` and return its window handle, falling back to :topleft/:botright
+-- when the nvim_open_win split API is unavailable.
+local function open_split_window(target_buf, source_win, terminal_position, terminal_height)
+	local opened, open_result = pcall(vim.api.nvim_open_win, target_buf, true, {
+		split = terminal_position == "top" and "above" or "below",
+		win = source_win,
+		height = terminal_height,
+	})
+	if opened then
+		return open_result
+	end
+
+	if terminal_position == "top" then
+		vim.cmd(("topleft %dsplit"):format(terminal_height))
+	else
+		vim.cmd(("botright %dsplit"):format(terminal_height))
+	end
+	local win = vim.api.nvim_get_current_win()
+	vim.api.nvim_win_set_buf(win, target_buf)
+	return win
+end
+
+-- Return focus to the source buffer's window after a run, re-displaying the
+-- source buffer if its window was replaced and falling back to another window.
+local function restore_source_window(source_win, source_buf)
+	local target_win = source_win
+	if not vim.api.nvim_win_is_valid(target_win) then
+		target_win = nil
+	end
+
+	if target_win and vim.api.nvim_win_get_buf(target_win) ~= source_buf then
+		for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+			if vim.api.nvim_win_get_buf(win) == source_buf then
+				target_win = win
+				break
+			end
+		end
+	end
+
+	if not target_win then
+		target_win = vim.api.nvim_tabpage_list_wins(0)[1]
+		if target_win and vim.api.nvim_buf_is_valid(source_buf) then
+			vim.api.nvim_win_set_buf(target_win, source_buf)
+		end
+	end
+
+	if target_win and vim.api.nvim_win_is_valid(target_win) then
+		if vim.api.nvim_buf_is_valid(source_buf) and vim.api.nvim_win_get_buf(target_win) ~= source_buf then
+			vim.api.nvim_win_set_buf(target_win, source_buf)
+		end
+		vim.api.nvim_set_current_win(target_win)
+	end
+end
+
+function M._build_script_for_test(cmd, show_command)
+	return build_script(cmd, show_command)
+end
+
+function M._cleanup_script_for_test(script_path)
+	cleanup_script(script_path)
 end
 
 function M.get_last_output()
@@ -246,23 +305,7 @@ local function run_buffer(cmd_def, opts)
 	local buf_name = build_buffer_name(cmd_def)
 	pcall(vim.api.nvim_buf_set_name, buf, buf_name)
 
-	local buf_win
-	local opened, open_result = pcall(vim.api.nvim_open_win, buf, true, {
-		split = terminal_position == "top" and "above" or "below",
-		win = source_win,
-		height = terminal_height,
-	})
-	if opened then
-		buf_win = open_result
-	else
-		if terminal_position == "top" then
-			vim.cmd(("topleft %dsplit"):format(terminal_height))
-		else
-			vim.cmd(("botright %dsplit"):format(terminal_height))
-		end
-		buf_win = vim.api.nvim_get_current_win()
-		vim.api.nvim_win_set_buf(buf_win, buf)
-	end
+	local buf_win = open_split_window(buf, source_win, terminal_position, terminal_height)
 
 	vim.wo[buf_win].wrap = true
 	vim.wo[buf_win].linebreak = true
@@ -288,44 +331,6 @@ local function run_buffer(cmd_def, opts)
 	if vim.api.nvim_win_is_valid(buf_win) and vim.api.nvim_win_get_buf(buf_win) == buf then
 		local initial_line = math.max(vim.api.nvim_buf_line_count(buf), 1)
 		pcall(vim.api.nvim_win_set_cursor, buf_win, { initial_line, 0 })
-	end
-
-	local function restore_source_window()
-		local target_win = source_win
-		if not vim.api.nvim_win_is_valid(target_win) then
-			target_win = nil
-		end
-
-		if target_win and vim.api.nvim_win_get_buf(target_win) ~= source_buf then
-			for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-				if vim.api.nvim_win_get_buf(win) == source_buf then
-					target_win = win
-					break
-				end
-			end
-		end
-
-		if not target_win then
-			target_win = vim.api.nvim_tabpage_list_wins(0)[1]
-			if target_win and vim.api.nvim_buf_is_valid(source_buf) then
-				vim.api.nvim_win_set_buf(target_win, source_buf)
-			end
-		end
-
-		if target_win and vim.api.nvim_win_is_valid(target_win) then
-			if vim.api.nvim_buf_is_valid(source_buf) and vim.api.nvim_win_get_buf(target_win) ~= source_buf then
-				vim.api.nvim_win_set_buf(target_win, source_buf)
-			end
-			vim.api.nvim_set_current_win(target_win)
-		end
-	end
-
-	local function cleanup_script()
-		if uv and uv.fs_unlink then
-			uv.fs_unlink(script_path)
-		else
-			os.remove(script_path)
-		end
 	end
 
 	local collected = { "" }
@@ -441,7 +446,7 @@ local function run_buffer(cmd_def, opts)
 
 		-- Ignore stale callbacks from superseded runs
 		if job_id ~= current_buffer_job then
-			cleanup_script()
+			cleanup_script(script_path)
 			return
 		end
 		current_buffer_job = nil
@@ -450,7 +455,7 @@ local function run_buffer(cmd_def, opts)
 		render_pending = false
 		render_output(exit_code)
 
-		cleanup_script()
+		cleanup_script(script_path)
 	end
 
 	-- Run under a PTY so terminal-aware programs (including code that
@@ -470,8 +475,8 @@ local function run_buffer(cmd_def, opts)
 	})
 
 	if job <= 0 then
-		cleanup_script()
-		restore_source_window()
+		cleanup_script(script_path)
+		restore_source_window(source_win, source_buf)
 		return false, "failed to start job"
 	end
 
@@ -501,7 +506,7 @@ local function run_buffer(cmd_def, opts)
 		})
 	end
 
-	restore_source_window()
+	restore_source_window(source_win, source_buf)
 	return true
 end
 
@@ -528,68 +533,13 @@ function M.run(cmd_def, opts)
 	M.last_cmd_def = vim.deepcopy(cmd_def)
 	local term_buf = vim.api.nvim_create_buf(true, false)
 	vim.b[term_buf].nvim_flow_terminal = 1
-	local term_win
-
-	local opened, open_result = pcall(vim.api.nvim_open_win, term_buf, true, {
-		split = terminal_position == "top" and "above" or "below",
-		win = source_win,
-		height = terminal_height,
-	})
-	if opened then
-		term_win = open_result
-	else
-		if terminal_position == "top" then
-			vim.cmd(("topleft %dsplit"):format(terminal_height))
-		else
-			vim.cmd(("botright %dsplit"):format(terminal_height))
-		end
-		term_win = vim.api.nvim_get_current_win()
-		vim.api.nvim_win_set_buf(term_win, term_buf)
-	end
+	local term_win = open_split_window(term_buf, source_win, terminal_position, terminal_height)
 	M.last_terminal_buf = term_buf
 	M.last_terminal_win = term_win
-
-	local function restore_source_window()
-		local target_win = source_win
-		if not vim.api.nvim_win_is_valid(target_win) then
-			target_win = nil
-		end
-
-		if target_win and vim.api.nvim_win_get_buf(target_win) ~= source_buf then
-			for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-				if vim.api.nvim_win_get_buf(win) == source_buf then
-					target_win = win
-					break
-				end
-			end
-		end
-
-		if not target_win then
-			target_win = vim.api.nvim_tabpage_list_wins(0)[1]
-			if target_win and vim.api.nvim_buf_is_valid(source_buf) then
-				vim.api.nvim_win_set_buf(target_win, source_buf)
-			end
-		end
-
-		if target_win and vim.api.nvim_win_is_valid(target_win) then
-			if vim.api.nvim_buf_is_valid(source_buf) and vim.api.nvim_win_get_buf(target_win) ~= source_buf then
-				vim.api.nvim_win_set_buf(target_win, source_buf)
-			end
-			vim.api.nvim_set_current_win(target_win)
-		end
-	end
 
 	local function capture_terminal_output()
 		if term_buf and vim.api.nvim_buf_is_valid(term_buf) then
 			M.last_output_lines = vim.api.nvim_buf_get_lines(term_buf, 0, -1, false)
-		end
-	end
-
-	local function cleanup_script()
-		if uv and uv.fs_unlink then
-			uv.fs_unlink(script_path)
-		else
-			os.remove(script_path)
 		end
 	end
 
@@ -601,19 +551,19 @@ function M.run(cmd_def, opts)
 				if M.last_terminal_buf == term_buf then
 					capture_terminal_output()
 				end
-				cleanup_script()
+				cleanup_script(script_path)
 			end)
 		end,
 	})
 
 	if job <= 0 then
-		cleanup_script()
-		restore_source_window()
+		cleanup_script(script_path)
+		restore_source_window(source_win, source_buf)
 		return false, "failed to start terminal job"
 	end
 
 	vim.cmd("normal! G")
-	restore_source_window()
+	restore_source_window(source_win, source_buf)
 
 	return true
 end

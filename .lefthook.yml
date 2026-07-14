@@ -20,4 +20,6 @@ pre-commit:
 
     record-demo-gif:
       glob: '**/*.lua'
+      only:
+        - ref: main
       run: ./vhs/record-demo-gif.sh

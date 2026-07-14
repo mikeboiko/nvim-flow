@@ -9,6 +9,10 @@ vim.api.nvim_create_user_command("FlowRun", function()
 	flow.run()
 end, {})
 
+vim.api.nvim_create_user_command("FlowRunHere", function()
+	flow.run_here()
+end, {})
+
 vim.api.nvim_create_user_command("FlowDebug", function()
 	flow.debug()
 end, {})

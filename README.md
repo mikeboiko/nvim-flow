@@ -1,6 +1,6 @@
 # nvim-flow
 
-[![CI](https://github.com/mikeboiko/nvim-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/mikeboiko/nvim-flow/actions/workflows/ci.yml)
+[![CI](https://github.com/bytehound-labs/nvim-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/bytehound-labs/nvim-flow/actions/workflows/ci.yml)
 
 `nvim-flow` is a pure lua Neovim workflow runner for file-based commands defined in `.flow.yml`.
 
@@ -60,7 +60,7 @@ I wanted a workflow that matches how I actually work in Neovim: simple YAML conf
 
 ```lua
 return {
-  { "mikeboiko/nvim-flow" },
+  { "bytehound-labs/nvim-flow" },
 }
 ```
 
@@ -69,7 +69,7 @@ return {
 ```lua
 return {
   {
-    "mikeboiko/nvim-flow",
+    "bytehound-labs/nvim-flow",
     event = { "BufReadPost", "BufNewFile" },
     cmd = { "FlowRun", "FlowRunHere", "FlowDebug", "FlowEdit", "FlowToggleLock", "FlowPreview", "FlowQuickfix" },
     opts = {
